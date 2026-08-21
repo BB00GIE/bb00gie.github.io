@@ -94,6 +94,10 @@ const createProject = (repo, index) => {
   link.rel = 'noreferrer';
   link.append(createElement('span', '', '↗'));
   copy.append(link);
+  const blogLink = createElement('a', 'text-link project-blog-link', 'Project updates ');
+  blogLink.href = `blog.html?repo=${encodeURIComponent(repo.full_name)}`;
+  blogLink.append(createElement('span', '', '→'));
+  copy.append(blogLink);
   project.append(copy);
   return project;
 };
