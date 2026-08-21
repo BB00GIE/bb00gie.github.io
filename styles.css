@@ -1,6 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
-:root { --ink:#161616; --paper:#f5f2ea; --yellow:#f6c945; --pink:#ef7eaa; --blue:#5b91d5; --line:rgba(22,22,22,.22); --display:'Space Grotesk', sans-serif; --mono:'DM Mono', monospace; }
+:root { --ink:#f1f3f0; --paper:#111416; --surface:#1b2023; --deep:#090b0c; --muted:#a8b0ad; --accent-ink:#161616; --yellow:#e8bb3f; --pink:#d9789d; --blue:#6394c7; --line:rgba(241,243,240,.24); --display:'Space Grotesk', sans-serif; --mono:'DM Mono', monospace; }
 * { box-sizing:border-box; }
 html { scroll-behavior:smooth; }
 body { margin:0; color:var(--ink); background:var(--paper); font-family:var(--display); font-size:16px; line-height:1.45; }
