@@ -1,7 +1,9 @@
 const menuToggle = document.querySelector('.menu-toggle');
 const siteNav = document.querySelector('.site-nav');
 const projectList = document.querySelector('#project-list');
+const skillLanguages = document.querySelector('#skill-languages');
 const githubUsername = 'BB00GIE';
+const profileLanguages = ['C#', 'Haskell'];
 
 menuToggle?.addEventListener('click', () => {
   const isOpen = siteNav.classList.toggle('is-open');
@@ -96,22 +98,63 @@ const createProject = (repo, index) => {
   return project;
 };
 
-const loadProjects = async () => {
-  if (!projectList) return;
+const loadRepositories = async () => {
+  const response = await fetch(`https://api.github.com/users/${githubUsername}/repos?sort=updated&per_page=100`);
+  if (!response.ok) throw new Error(`GitHub returned ${response.status}`);
+  return (await response.json()).filter((repo) => !repo.fork && !repo.private && repo.visibility === 'public');
+};
+
+const renderLanguages = async (repos) => {
+  if (!skillLanguages) return;
+
   try {
-    const response = await fetch(`https://api.github.com/users/${githubUsername}/repos?sort=updated&per_page=100`);
-    if (!response.ok) throw new Error(`GitHub returned ${response.status}`);
-    const repos = (await response.json()).filter((repo) => !repo.fork && !repo.private && repo.visibility === 'public');
-    projectList.replaceChildren(...repos.map(createProject));
-    projectList.querySelectorAll('.reveal').forEach((item) => revealObserver.observe(item));
+    const languageResponses = await Promise.all(repos.map((repo) => fetch(repo.languages_url)));
+    const languageTotals = new Map();
+
+    for (const [index, response] of languageResponses.entries()) {
+      const languages = response.ok ? await response.json() : {};
+      if (!Object.keys(languages).length && repos[index].language) {
+        languages[repos[index].language] = 1;
+      }
+      Object.entries(languages).forEach(([language, bytes]) => {
+        languageTotals.set(language, (languageTotals.get(language) || 0) + bytes);
+      });
+    }
+
+    profileLanguages.forEach((language) => {
+      if (!languageTotals.has(language)) languageTotals.set(language, 0);
+    });
+
+    const languages = [...languageTotals.entries()]
+      .sort((first, second) => second[1] - first[1])
+      .map(([language]) => language);
+    skillLanguages.textContent = languages.length ? languages.join(', ') : 'Languages will appear as projects are published.';
   } catch (error) {
-    projectList.replaceChildren(createElement('p', 'project-status', 'Projects could not load right now. View them on GitHub.'));
-    const link = createElement('a', 'text-link', 'Open GitHub profile ');
-    link.href = `https://github.com/${githubUsername}`;
-    link.target = '_blank';
-    link.rel = 'noreferrer';
-    link.append(createElement('span', '', '↗'));
-    projectList.append(link);
+    const fallback = [...new Set([...profileLanguages, ...repos.map((repo) => repo.language).filter(Boolean)])];
+    skillLanguages.textContent = fallback.length ? fallback.join(', ') : 'Languages will appear as projects are published.';
+  }
+};
+
+const loadProjects = async () => {
+  if (!projectList && !skillLanguages) return;
+  try {
+    const repos = await loadRepositories();
+    if (projectList) {
+      projectList.replaceChildren(...repos.map(createProject));
+      projectList.querySelectorAll('.reveal').forEach((item) => revealObserver.observe(item));
+    }
+    renderLanguages(repos);
+  } catch (error) {
+    if (projectList) {
+      projectList.replaceChildren(createElement('p', 'project-status', 'Projects could not load right now. View them on GitHub.'));
+      const link = createElement('a', 'text-link', 'Open GitHub profile ');
+      link.href = `https://github.com/${githubUsername}`;
+      link.target = '_blank';
+      link.rel = 'noreferrer';
+      link.append(createElement('span', '', '↗'));
+      projectList.append(link);
+    }
+    if (skillLanguages) skillLanguages.textContent = 'Languages could not load right now.';
   }
 };
 
