@@ -13,6 +13,7 @@ const authStatus = document.querySelector('#auth-status');
 const signIn = document.querySelector('#sign-in');
 const signOut = document.querySelector('#sign-out');
 const accessMessage = document.querySelector('#access-message');
+const submitButton = updateForm?.querySelector('button[type="submit"]');
 const supabaseConfig = window.SUPABASE_CONFIG;
 const supabaseClient = window.supabase && supabaseConfig && !supabaseConfig.url.includes('YOUR-PROJECT')
   ? window.supabase.createClient(supabaseConfig.url, supabaseConfig.anonKey)
@@ -23,7 +24,7 @@ const getUpdates = async () => {
   if (!supabaseClient || !repositoryName) return [];
   const { data, error } = await supabaseClient
     .from('project_updates')
-    .select('repo_full_name, title, body, created_at')
+    .select('repo_full_name, title, body, image_url, created_at')
     .like('repo_full_name', `${repositoryName}%`)
     .order('created_at', { ascending: false });
   if (error) throw error;
@@ -55,15 +56,27 @@ const renderUpdates = async () => {
   updates.forEach((update) => {
     const article = document.createElement('article');
     article.className = 'update-entry';
-    const date = new Date(update.date);
+    const date = new Date(update.created_at);
     const meta = document.createElement('p');
     meta.className = 'update-date';
     meta.textContent = Number.isNaN(date.getTime()) ? 'Project update' : date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
     const title = document.createElement('h2');
     title.textContent = update.title;
     const body = document.createElement('p');
-    body.textContent = update.body;
-    article.append(meta, title, body);
+    body.className = 'update-body';
+    if (update.body) {
+      body.textContent = update.body;
+      article.append(body);
+    }
+    if (update.image_url) {
+      const image = document.createElement('img');
+      image.className = 'update-image';
+      image.src = update.image_url;
+      image.alt = update.title;
+      image.loading = 'lazy';
+      article.append(image);
+    }
+    article.prepend(meta, title);
     updatesElement.append(article);
   });
 };
@@ -132,18 +145,53 @@ updateForm?.addEventListener('submit', (event) => {
   event.preventDefault();
   const publishUpdate = async () => {
     const formData = new FormData(updateForm);
-    const { error } = await supabaseClient.from('project_updates').insert({
-      repo_full_name: repositoryName,
-      title: formData.get('title').trim(),
-      body: formData.get('body').trim(),
-      author_id: currentSession.user.id
-    });
-    if (error) {
+    const title = formData.get('title').trim();
+    const body = formData.get('body').trim();
+    const image = formData.get('image');
+    if (!body && !image?.size) {
       accessMessage.hidden = false;
-      accessMessage.textContent = 'This account cannot publish updates.';
+      accessMessage.textContent = 'Add text or choose an image before publishing.';
+      return;
+    }
+    if (image?.size > 5 * 1024 * 1024) {
+      accessMessage.hidden = false;
+      accessMessage.textContent = 'Images must be 5 MB or smaller.';
+      return;
+    }
+
+    submitButton.disabled = true;
+    submitButton.setAttribute('aria-busy', 'true');
+    let imageUrl = null;
+    let imagePath = null;
+    try {
+      if (image?.size) {
+        imagePath = `${currentSession.user.id}/${crypto.randomUUID()}-${image.name}`;
+        const { error: uploadError } = await supabaseClient.storage
+          .from('project-updates')
+          .upload(imagePath, image, { contentType: image.type, upsert: false });
+        if (uploadError) throw uploadError;
+        imageUrl = supabaseClient.storage.from('project-updates').getPublicUrl(imagePath).data.publicUrl;
+      }
+
+      const { error } = await supabaseClient.from('project_updates').insert({
+        repo_full_name: repositoryName,
+        title,
+        body: body || null,
+        image_url: imageUrl,
+        author_id: currentSession.user.id
+      });
+      if (error) throw error;
+    } catch (error) {
+      if (imagePath) await supabaseClient.storage.from('project-updates').remove([imagePath]);
+      accessMessage.hidden = false;
+      accessMessage.textContent = 'This update could not be published. Check the image and try again.';
+      submitButton.disabled = false;
+      submitButton.removeAttribute('aria-busy');
       return;
     }
     updateForm.reset();
+    submitButton.disabled = false;
+    submitButton.removeAttribute('aria-busy');
     renderUpdates();
   };
   publishUpdate();
