@@ -40,7 +40,10 @@
         <label for="update-title">Update title</label>
         <input id="update-title" name="title" type="text" maxlength="120" placeholder="What changed?" required>
         <label for="update-body">Update</label>
-        <textarea id="update-body" name="body" rows="7" placeholder="Write a note about this project..." required></textarea>
+        <textarea id="update-body" name="body" rows="7" placeholder="Write a note about this project..."></textarea>
+        <label for="update-image">Image</label>
+        <input id="update-image" name="image" type="file" accept="image/*">
+        <p class="form-hint">Add a note, an image, or both. Images must be 5 MB or smaller.</p>
         <button type="submit">Publish update <span aria-hidden="true">+</span></button>
       </form>
       <div id="updates" class="updates" aria-live="polite"></div>

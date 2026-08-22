@@ -1,28 +1,48 @@
-create table public.project_updates (
+create table if not exists public.project_updates (
   id uuid primary key default gen_random_uuid(),
   repo_full_name text not null,
   title text not null check (char_length(title) between 1 and 120),
-  body text not null check (char_length(body) between 1 and 10000),
+  body text check (body is null or char_length(body) between 1 and 10000),
+  image_url text,
+  constraint project_updates_has_content check (body is not null or image_url is not null),
   author_id uuid not null references auth.users(id),
   created_at timestamptz not null default now()
 );
 
-create table public.allowed_authors (
+create table if not exists public.allowed_authors (
   user_id uuid primary key references auth.users(id) on delete cascade,
   github_username text not null unique
 );
 
+alter table public.project_updates alter column body drop not null;
+alter table public.project_updates add column if not exists image_url text;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'project_updates_has_content'
+      and conrelid = 'public.project_updates'::regclass
+  ) then
+    alter table public.project_updates
+      add constraint project_updates_has_content check (body is not null or image_url is not null);
+  end if;
+end $$;
+
 alter table public.project_updates enable row level security;
 alter table public.allowed_authors enable row level security;
 
+drop policy if exists "Authors can check their own access" on public.allowed_authors;
 create policy "Authors can check their own access"
   on public.allowed_authors for select
   to authenticated
   using (auth.uid() = user_id);
 
+drop policy if exists "Anyone can read project updates" on public.project_updates;
 create policy "Anyone can read project updates"
   on public.project_updates for select using (true);
 
+drop policy if exists "Allowed authors can publish project updates" on public.project_updates;
 create policy "Allowed authors can publish project updates"
   on public.project_updates for insert
   to authenticated
@@ -37,3 +57,25 @@ create policy "Allowed authors can publish project updates"
 -- After the allowed GitHub account signs in once, add its Supabase auth UUID:
 -- insert into public.allowed_authors (user_id, github_username)
 -- values ('AUTH-USER-UUID', 'BB00GIE');
+
+insert into storage.buckets (id, name, public)
+values ('project-updates', 'project-updates', true)
+on conflict (id) do update set public = true;
+
+drop policy if exists "Anyone can view project update images" on storage.objects;
+create policy "Anyone can view project update images"
+  on storage.objects for select
+  using (bucket_id = 'project-updates');
+
+drop policy if exists "Allowed authors can upload project update images" on storage.objects;
+create policy "Allowed authors can upload project update images"
+  on storage.objects for insert
+  to authenticated
+  with check (
+    bucket_id = 'project-updates'
+    and (storage.foldername(name))[1] = auth.uid()::text
+    and exists (
+      select 1 from public.allowed_authors
+      where user_id = auth.uid()
+    )
+  );
