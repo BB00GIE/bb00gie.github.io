@@ -39,6 +39,13 @@ const createElement = (tagName, className, text) => {
   return element;
 };
 
+const getBlogRepositoryName = (fullName) => {
+  const separatorIndex = fullName.lastIndexOf('/');
+  const owner = fullName.slice(0, separatorIndex);
+  const repository = fullName.slice(separatorIndex + 1).split('_', 1)[0];
+  return `${owner}/${repository}`;
+};
+
 const createVisual = (index, name) => {
   const visual = createElement('div', `project-visual visual-${projectVisuals[index % projectVisuals.length]}`);
 
@@ -95,7 +102,7 @@ const createProject = (repo, index) => {
   link.append(createElement('span', '', '↗'));
   copy.append(link);
   const blogLink = createElement('a', 'text-link project-blog-link', 'Project updates ');
-  blogLink.href = `blog.html?repo=${encodeURIComponent(repo.full_name)}`;
+  blogLink.href = `blog.html?repo=${encodeURIComponent(getBlogRepositoryName(repo.full_name))}`;
   blogLink.append(createElement('span', '', '→'));
   copy.append(blogLink);
   project.append(copy);
