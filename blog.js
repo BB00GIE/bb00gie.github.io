@@ -1,5 +1,8 @@
 const params = new URLSearchParams(window.location.search);
-const repositoryName = params.get('repo');
+const requestedRepositoryName = params.get('repo');
+const repositoryName = requestedRepositoryName
+  ? `${requestedRepositoryName.slice(0, requestedRepositoryName.lastIndexOf('/') + 1)}${requestedRepositoryName.split('/').pop().split('_', 1)[0]}`
+  : null;
 const projectTitle = document.querySelector('#project-title');
 const projectDescription = document.querySelector('#project-description');
 const githubLink = document.querySelector('#github-link');
@@ -20,11 +23,11 @@ const getUpdates = async () => {
   if (!supabaseClient || !repositoryName) return [];
   const { data, error } = await supabaseClient
     .from('project_updates')
-    .select('title, body, created_at')
-    .eq('repo_full_name', repositoryName)
+    .select('repo_full_name, title, body, created_at')
+    .like('repo_full_name', `${repositoryName}%`)
     .order('created_at', { ascending: false });
   if (error) throw error;
-  return data;
+  return data.filter((update) => update.repo_full_name === repositoryName || update.repo_full_name.startsWith(`${repositoryName}_`));
 };
 
 const renderUpdates = async () => {
