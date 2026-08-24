@@ -73,9 +73,10 @@ h1 em, h2 em { font-style:normal; color:#ec5a4d; }
 .access-message { max-width:45rem; padding:1rem; color:var(--accent-ink); background:var(--pink); font:500 .72rem var(--mono); text-transform:uppercase; }
 .updates { max-width:52rem; }
 .update-entry { padding:2rem 0 2.5rem; border-top:1px solid var(--ink); }
-.update-entry-header { display:flex; justify-content:space-between; gap:1rem; align-items:flex-start; }
-.update-actions { display:flex; gap:.75rem; flex-shrink:0; }
-.update-actions button { border:0; padding:0; color:var(--accent-ink); background:transparent; cursor:pointer; font:500 .68rem var(--mono); text-transform:uppercase; text-decoration:underline; }
+.update-entry-header { display:flex; flex-wrap:wrap; justify-content:space-between; gap:1rem; align-items:flex-start; }
+.update-actions { display:flex; gap:.5rem; flex-shrink:0; }
+.update-actions button { min-width:4.5rem; border:1px solid var(--accent-ink); padding:.65rem .75rem; color:var(--accent-ink); background:var(--yellow); cursor:pointer; font:500 .68rem var(--mono); text-transform:uppercase; }
+.update-actions button:hover, .update-actions button:focus-visible { color:var(--yellow); background:var(--accent-ink); }
 .update-date { margin-bottom:1.2rem; color:#ec5a4d; font:400 .68rem var(--mono); text-transform:uppercase; }
 .update-entry h2 { margin-bottom:.8rem; font-size:clamp(2rem, 4vw, 4rem); line-height:.95; letter-spacing:-.07em; text-transform:capitalize; }
 .update-body { max-width:42rem; margin:0; white-space:pre-wrap; font-size:1.05rem; }
