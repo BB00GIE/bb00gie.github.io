@@ -13,8 +13,48 @@ const experienceCount = document.querySelector('#experience-count');
 const formHeading = document.querySelector('#form-heading');
 const formMessage = document.querySelector('#form-message');
 const cancelEdit = document.querySelector('#cancel-edit');
+const importResume = document.querySelector('#import-resume');
 let editingExperience = null;
 let experiences = [];
+const resumeExperiences = [
+  {
+    company: 'Google',
+    role: 'Full Stack Software Engineer',
+    location: null,
+    start_date: '2022-06-01',
+    end_date: null,
+    description: 'Worked on the Core Shopping team to create a positive shopping experience on Google Search.',
+    highlights: [
+      'Created end-to-end data pipelines to extend the user experience to other locales.',
+      'Conducted A/B testing and data analysis to determine the impact of new features.',
+      'Leveraged LLMs to create new user experiences on Search.'
+    ],
+    technologies: ['C++', 'Java', 'Python', 'JavaScript', 'SQL', 'Git'],
+    sort_order: 0
+  },
+  {
+    company: 'Amazon',
+    role: 'Software Engineer Intern (EC2)',
+    location: 'Seattle, WA',
+    start_date: '2021-05-01',
+    end_date: '2021-08-01',
+    description: 'Worked on a project aimed at improving the autoscaling algorithm and optimizing the existing implementation.',
+    highlights: ['Collaborated with team members to design and implement the new algorithm.'],
+    technologies: ['C++', 'Java', 'Python'],
+    sort_order: 1
+  },
+  {
+    company: 'Delaware State University',
+    role: 'Computer Science Tutor and Teaching Assistant',
+    location: null,
+    start_date: '2019-01-01',
+    end_date: '2022-05-01',
+    description: 'Helped students with Python and Java programming while developing weekly coding challenges.',
+    highlights: [],
+    technologies: ['Python', 'Java'],
+    sort_order: 2
+  }
+];
 
 const showMessage = (message) => {
   formMessage.hidden = false;
@@ -126,6 +166,27 @@ const deleteExperience = async (id) => {
   await loadExperiences();
 };
 
+const importResumeEntries = async () => {
+  importResume.disabled = true;
+  try {
+    const newEntries = resumeExperiences.filter((resumeExperience) => !experiences.some((experience) => (
+      experience.company === resumeExperience.company
+      && experience.role === resumeExperience.role
+      && experience.start_date === resumeExperience.start_date
+    )));
+    if (!newEntries.length) {
+      showMessage('Resume entries are already loaded.');
+      return;
+    }
+    const { error } = await supabaseClient.from('work_experience').insert(newEntries);
+    if (error) { showMessage('Resume entries could not be imported.'); return; }
+    await loadExperiences();
+    showMessage(`${newEntries.length} resume ${newEntries.length === 1 ? 'entry' : 'entries'} imported. Review and edit them below.`);
+  } finally {
+    importResume.disabled = false;
+  }
+};
+
 const updateAuthUi = async (session) => {
   if (!session) {
     authStatus.textContent = supabaseClient ? 'Public experience record. Sign in to manage it.' : 'Supabase is not configured yet.';
@@ -163,6 +224,7 @@ signOut?.addEventListener('click', async () => {
 });
 
 cancelEdit?.addEventListener('click', resetForm);
+importResume?.addEventListener('click', importResumeEntries);
 
 experienceForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
