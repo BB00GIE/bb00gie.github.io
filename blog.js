@@ -179,11 +179,18 @@ const updateAuthUi = async (session) => {
   authStatus.textContent = `Signed in as ${session.user.user_metadata?.user_name || session.user.email || 'your account'}.`;
   signIn.hidden = true;
   signOut.hidden = false;
-  const { data: allowedAuthor } = await supabaseClient
+  const { data: allowedAuthor, error: accessError } = await supabaseClient
     .from('allowed_authors')
     .select('user_id')
     .eq('user_id', session.user.id)
     .maybeSingle();
+  if (accessError) {
+    updateForm.hidden = true;
+    accessMessage.hidden = false;
+    accessMessage.textContent = 'Publisher access could not be checked. Run the allowed_authors policy in Supabase.';
+    renderUpdates();
+    return;
+  }
   isAllowedPublisher = Boolean(allowedAuthor);
   updateForm.hidden = !isAllowedPublisher;
   accessMessage.hidden = isAllowedPublisher;
