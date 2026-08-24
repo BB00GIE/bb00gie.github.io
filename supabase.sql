@@ -54,6 +54,19 @@ create policy "Allowed authors can publish project updates"
     )
   );
 
+drop policy if exists "Allowed authors can edit project updates" on public.project_updates;
+create policy "Allowed authors can edit project updates"
+  on public.project_updates for update
+  to authenticated
+  using (exists (select 1 from public.allowed_authors where user_id = auth.uid()))
+  with check (exists (select 1 from public.allowed_authors where user_id = auth.uid()));
+
+drop policy if exists "Allowed authors can delete project updates" on public.project_updates;
+create policy "Allowed authors can delete project updates"
+  on public.project_updates for delete
+  to authenticated
+  using (exists (select 1 from public.allowed_authors where user_id = auth.uid()));
+
 -- After the allowed GitHub account signs in once, add its Supabase auth UUID:
 -- insert into public.allowed_authors (user_id, github_username)
 -- values ('AUTH-USER-UUID', 'BB00GIE');
@@ -79,3 +92,11 @@ create policy "Allowed authors can upload project update images"
       where user_id = auth.uid()
     )
   );
+
+drop policy if exists "Allowed authors can delete project update images" on storage.objects;
+create policy "Allowed authors can delete project update images"
+  on storage.objects for delete
+  to authenticated
+  using (bucket_id = 'project-updates' and exists (
+    select 1 from public.allowed_authors where user_id = auth.uid()
+  ));

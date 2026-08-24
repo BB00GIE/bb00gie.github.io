@@ -37,6 +37,7 @@
       </div>
       <p id="access-message" class="access-message" hidden></p>
       <form id="update-form" class="update-form" hidden>
+        <p id="update-form-heading" class="eyebrow">New update</p>
         <label for="update-title">Update title</label>
         <input id="update-title" name="title" type="text" maxlength="120" placeholder="What changed?" required>
         <label for="update-body">Update</label>
@@ -44,7 +45,10 @@
         <label for="update-image">Image</label>
         <input id="update-image" name="image" type="file" accept="image/*">
         <p class="form-hint">Add a note, an image, or both. Images must be 5 MB or smaller.</p>
-        <button type="submit">Publish update <span aria-hidden="true">+</span></button>
+        <div class="update-form-actions">
+          <button type="submit">Publish update <span aria-hidden="true">+</span></button>
+          <button id="update-cancel" class="button-secondary" type="button" hidden>Cancel</button>
+        </div>
       </form>
       <div id="updates" class="updates" aria-live="polite"></div>
     </section>
