@@ -16,6 +16,7 @@ const accessMessage = document.querySelector('#access-message');
 const updateFormHeading = document.querySelector('#update-form-heading');
 const cancelUpdate = document.querySelector('#update-cancel');
 const submitButton = updateForm?.querySelector('button[type="submit"]');
+const publishFeedback = document.querySelector('#publish-feedback');
 const supabaseConfig = window.SUPABASE_CONFIG;
 const supabaseClient = window.supabase && supabaseConfig && !supabaseConfig.url.includes('YOUR-PROJECT')
   ? window.supabase.createClient(supabaseConfig.url, supabaseConfig.anonKey)
@@ -85,7 +86,7 @@ const renderUpdates = async () => {
     const body = document.createElement('p');
     body.className = 'update-body';
     if (update.body) {
-      body.textContent = update.body;
+      appendLinkedText(body, update.body);
       article.append(body);
     }
     if (update.image_url) {
@@ -109,6 +110,74 @@ const resetUpdateForm = () => {
   updateFormHeading.textContent = 'New update';
   submitButton.innerHTML = 'Publish update <span aria-hidden="true">+</span>';
   cancelUpdate.hidden = true;
+  publishFeedback.hidden = true;
+  publishFeedback.textContent = '';
+};
+
+const linkPattern = /Link\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\)|(?:https?:\/\/|www\.)[^\s<]+/gi;
+
+const normalizeLink = (value) => {
+  const cleanValue = value.replace(/[.,!?;:)}\]]+$/, '');
+  try {
+    const url = new URL(cleanValue.startsWith('www.') ? `https://${cleanValue}` : cleanValue);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? { href: url.href, text: cleanValue } : null;
+  } catch (error) {
+    return null;
+  }
+};
+
+const getPostLinks = (content) => {
+  const links = [];
+  for (const match of content.matchAll(linkPattern)) {
+    const link = normalizeLink(match[1] || match[0]);
+    if (link) links.push(link.href);
+  }
+  return [...new Set(links)];
+};
+
+const spellcheckPost = async (content) => {
+  const request = new URLSearchParams({ text: content, language: 'en-US' });
+  const response = await fetch('https://api.languagetool.org/v2/check', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: request
+  });
+  if (!response.ok) throw new Error(`Spellcheck returned ${response.status}`);
+  const result = await response.json();
+  return result.matches || [];
+};
+
+const reviewPost = async (title, body) => {
+  const content = `${title}\n${body}`;
+  const links = getPostLinks(content);
+  let spellingIssues = [];
+  let spellcheckAvailable = true;
+  try {
+    spellingIssues = await spellcheckPost(content);
+  } catch (error) {
+    spellcheckAvailable = false;
+  }
+  return { links, spellingIssues, spellcheckAvailable };
+};
+
+const appendLinkedText = (element, content) => {
+  let lastIndex = 0;
+  for (const match of content.matchAll(linkPattern)) {
+    const rawUrl = match[0];
+    const customText = match[2];
+    const link = normalizeLink(match[1] || rawUrl);
+    if (!link) continue;
+    element.append(document.createTextNode(content.slice(lastIndex, match.index)));
+    const anchor = document.createElement('a');
+    anchor.href = link.href;
+    anchor.target = '_blank';
+    anchor.rel = 'noopener noreferrer';
+    anchor.textContent = customText || link.text;
+    element.append(anchor);
+    if (!customText) element.append(document.createTextNode(rawUrl.slice(link.text.length)));
+    lastIndex = match.index + rawUrl.length;
+  }
+  element.append(document.createTextNode(content.slice(lastIndex)));
 };
 
 const beginEdit = (update) => {
@@ -216,8 +285,8 @@ updateForm?.addEventListener('submit', (event) => {
   event.preventDefault();
   const publishUpdate = async () => {
     const formData = new FormData(updateForm);
-    const title = formData.get('title').trim();
-    const body = formData.get('body').trim();
+    const title = formData.get('title')?.trim() || '';
+    const body = formData.get('body')?.trim() || '';
     const image = formData.get('image');
     if (!body && !image?.size) {
       accessMessage.hidden = false;
@@ -232,6 +301,30 @@ updateForm?.addEventListener('submit', (event) => {
 
     submitButton.disabled = true;
     submitButton.setAttribute('aria-busy', 'true');
+    publishFeedback.hidden = true;
+    try {
+      const review = await reviewPost(title, body);
+      const issueSummary = review.spellingIssues.slice(0, 5).map((issue) => {
+        const suggestion = issue.replacements?.[0]?.value;
+        return suggestion ? `${issue.context}: ${suggestion}` : issue.context;
+      });
+      const linkSummary = review.links.length ? `${review.links.length} link${review.links.length === 1 ? '' : 's'} found and will be made clickable.` : 'No links found.';
+      publishFeedback.hidden = false;
+      publishFeedback.textContent = review.spellcheckAvailable
+        ? `${issueSummary.length ? `Spelling review: ${issueSummary.join(' | ')}. ` : 'Spelling review passed. '}${linkSummary}`
+        : `Spellcheck is unavailable right now. ${linkSummary}`;
+      if (issueSummary.length && !window.confirm('Spellcheck found possible issues. Publish this update anyway?')) {
+        submitButton.disabled = false;
+        submitButton.removeAttribute('aria-busy');
+        return;
+      }
+    } catch (error) {
+      publishFeedback.hidden = false;
+      publishFeedback.textContent = 'The content review could not run. Please check the text and try again.';
+      submitButton.disabled = false;
+      submitButton.removeAttribute('aria-busy');
+      return;
+    }
     let imageUrl = editingUpdate?.image_url || null;
     let imagePath = null;
     try {
