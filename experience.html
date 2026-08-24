@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Work experience - Brandon Elmore</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="experience.js" defer></script>
+</head>
+<body class="experience-page">
+  <a class="skip-link" href="#main-content">Skip to content</a>
+  <header class="site-header">
+    <a class="wordmark" href="index.html#top" aria-label="Brandon Elmore home">BE<span>.</span></a>
+    <button id="sign-out" class="text-link" type="button" hidden>Sign out <span aria-hidden="true">↗</span></button>
+  </header>
+  <main id="main-content">
+    <section class="experience-hero section-wrap">
+      <p class="eyebrow">Private workspace</p>
+      <h1>Work<br><em>experience.</em></h1>
+      <p id="auth-status" class="experience-status">Loading experience...</p>
+      <button id="sign-in" type="button">Sign in with GitHub <span aria-hidden="true">↗</span></button>
+      <p id="access-message" class="access-message" hidden></p>
+    </section>
+    <section id="experience-content" class="experience-content section-wrap">
+      <div class="section-heading"><p class="eyebrow">Career record</p><p id="experience-count" class="section-note">0 entries</p></div>
+      <form id="experience-form" class="experience-form" hidden>
+        <p id="form-heading" class="eyebrow">New role</p>
+        <div class="experience-form-grid">
+          <label>Company<input name="company" type="text" maxlength="160" required></label>
+          <label>Role<input name="role" type="text" maxlength="160" required></label>
+          <label>Location<input name="location" type="text" maxlength="160"></label>
+          <label>Start date<input name="start_date" type="month" required></label>
+          <label>End date<input name="end_date" type="month"></label>
+        </div>
+        <label>Description<textarea name="description" rows="4"></textarea></label>
+        <label>Highlights <span class="form-hint">One item per line</span><textarea name="highlights" rows="5"></textarea></label>
+        <label>Technologies <span class="form-hint">Comma-separated</span><input name="technologies" type="text"></label>
+        <label>Display order<input name="sort_order" type="number" value="0"></label>
+        <p id="form-message" class="publish-feedback" role="status" hidden></p>
+        <div class="update-form-actions">
+          <button id="save-experience" type="submit">Save role <span aria-hidden="true">+</span></button>
+          <button id="cancel-edit" class="button-secondary" type="button" hidden>Cancel</button>
+        </div>
+      </form>
+      <div id="experience-list" class="experience-list" aria-live="polite"></div>
+    </section>
+  </main>
+</body>
+</html>
