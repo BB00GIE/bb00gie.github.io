@@ -65,12 +65,17 @@ h1 em, h2 em { font-style:normal; color:#ec5a4d; }
 .update-form button { width:max-content; margin-top:.75rem; border:1px solid var(--accent-ink); padding:.8rem 1rem; color:var(--accent-ink); background:var(--yellow); cursor:pointer; font:500 .72rem var(--mono); text-transform:uppercase; }
 .update-form button:disabled { cursor:wait; opacity:.6; }
 .update-form button span { font-size:1.1rem; }
+.update-form-actions { display:flex; flex-wrap:wrap; gap:.75rem; align-items:center; }
+.update-form .button-secondary { color:var(--ink); background:var(--surface); border-color:var(--ink); }
 .auth-panel { max-width:45rem; display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:1rem 0; border-top:1px solid var(--ink); border-bottom:1px solid var(--ink); }
 .auth-panel p { margin:0; color:var(--muted); }
 .auth-panel button { border:1px solid var(--accent-ink); padding:.8rem 1rem; color:var(--accent-ink); background:var(--yellow); cursor:pointer; font:500 .72rem var(--mono); text-transform:uppercase; }
 .access-message { max-width:45rem; padding:1rem; color:var(--accent-ink); background:var(--pink); font:500 .72rem var(--mono); text-transform:uppercase; }
 .updates { max-width:52rem; }
 .update-entry { padding:2rem 0 2.5rem; border-top:1px solid var(--ink); }
+.update-entry-header { display:flex; justify-content:space-between; gap:1rem; align-items:flex-start; }
+.update-actions { display:flex; gap:.75rem; flex-shrink:0; }
+.update-actions button { border:0; padding:0; color:var(--accent-ink); background:transparent; cursor:pointer; font:500 .68rem var(--mono); text-transform:uppercase; text-decoration:underline; }
 .update-date { margin-bottom:1.2rem; color:#ec5a4d; font:400 .68rem var(--mono); text-transform:uppercase; }
 .update-entry h2 { margin-bottom:.8rem; font-size:clamp(2rem, 4vw, 4rem); line-height:.95; letter-spacing:-.07em; text-transform:capitalize; }
 .update-body { max-width:42rem; margin:0; white-space:pre-wrap; font-size:1.05rem; }

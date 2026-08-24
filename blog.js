@@ -13,18 +13,22 @@ const authStatus = document.querySelector('#auth-status');
 const signIn = document.querySelector('#sign-in');
 const signOut = document.querySelector('#sign-out');
 const accessMessage = document.querySelector('#access-message');
+const updateFormHeading = document.querySelector('#update-form-heading');
+const cancelUpdate = document.querySelector('#update-cancel');
 const submitButton = updateForm?.querySelector('button[type="submit"]');
 const supabaseConfig = window.SUPABASE_CONFIG;
 const supabaseClient = window.supabase && supabaseConfig && !supabaseConfig.url.includes('YOUR-PROJECT')
   ? window.supabase.createClient(supabaseConfig.url, supabaseConfig.anonKey)
   : null;
 let currentSession = null;
+let isAllowedPublisher = false;
+let editingUpdate = null;
 
 const getUpdates = async () => {
   if (!supabaseClient || !repositoryName) return [];
   const { data, error } = await supabaseClient
     .from('project_updates')
-    .select('repo_full_name, title, body, image_url, created_at')
+    .select('id, repo_full_name, title, body, image_url, created_at')
     .like('repo_full_name', `${repositoryName}%`)
     .order('created_at', { ascending: false });
   if (error) throw error;
@@ -62,6 +66,22 @@ const renderUpdates = async () => {
     meta.textContent = Number.isNaN(date.getTime()) ? 'Project update' : date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
     const title = document.createElement('h2');
     title.textContent = update.title;
+    const entryHeader = document.createElement('div');
+    entryHeader.className = 'update-entry-header';
+    const actions = document.createElement('div');
+    actions.className = 'update-actions';
+    if (isAllowedPublisher) {
+      const editButton = document.createElement('button');
+      editButton.type = 'button';
+      editButton.textContent = 'Edit';
+      editButton.addEventListener('click', () => beginEdit(update));
+      const deleteButton = document.createElement('button');
+      deleteButton.type = 'button';
+      deleteButton.textContent = 'Delete';
+      deleteButton.addEventListener('click', () => deleteUpdate(update));
+      actions.append(editButton, deleteButton);
+    }
+    entryHeader.append(title, actions);
     const body = document.createElement('p');
     body.className = 'update-body';
     if (update.body) {
@@ -76,9 +96,46 @@ const renderUpdates = async () => {
       image.loading = 'lazy';
       article.append(image);
     }
-    article.prepend(meta, title);
+    article.prepend(meta, entryHeader);
     updatesElement.append(article);
   });
+};
+
+const imagePathFromUrl = (imageUrl) => imageUrl?.split('/project-updates/')[1] || null;
+
+const resetUpdateForm = () => {
+  editingUpdate = null;
+  updateForm.reset();
+  updateFormHeading.textContent = 'New update';
+  submitButton.innerHTML = 'Publish update <span aria-hidden="true">+</span>';
+  cancelUpdate.hidden = true;
+};
+
+const beginEdit = (update) => {
+  editingUpdate = update;
+  updateFormHeading.textContent = 'Edit update';
+  updateForm.elements.title.value = update.title;
+  updateForm.elements.body.value = update.body || '';
+  updateForm.elements.image.value = '';
+  submitButton.innerHTML = 'Save update <span aria-hidden="true">+</span>';
+  cancelUpdate.hidden = false;
+  updateForm.hidden = false;
+  updateForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+
+const deleteUpdate = async (update) => {
+  if (!window.confirm(`Delete "${update.title}"?`)) return;
+  try {
+    const { error } = await supabaseClient.from('project_updates').delete().eq('id', update.id);
+    if (error) throw error;
+    const imagePath = imagePathFromUrl(update.image_url);
+    if (imagePath) await supabaseClient.storage.from('project-updates').remove([decodeURIComponent(imagePath)]);
+    if (editingUpdate?.id === update.id) resetUpdateForm();
+    renderUpdates();
+  } catch (error) {
+    accessMessage.hidden = false;
+    accessMessage.textContent = 'This update could not be deleted. Please try again.';
+  }
 };
 
 const loadProject = async () => {
@@ -107,12 +164,15 @@ const loadProject = async () => {
 
 const updateAuthUi = async (session) => {
   currentSession = session;
+  isAllowedPublisher = false;
   if (!session) {
     authStatus.textContent = supabaseClient ? 'Sign in to publish project updates.' : 'Supabase is not configured yet.';
     signIn.hidden = !supabaseClient;
     signOut.hidden = true;
     updateForm.hidden = true;
+    resetUpdateForm();
     accessMessage.hidden = true;
+    renderUpdates();
     return;
   }
 
@@ -124,9 +184,11 @@ const updateAuthUi = async (session) => {
     .select('user_id')
     .eq('user_id', session.user.id)
     .maybeSingle();
-  updateForm.hidden = !allowedAuthor;
-  accessMessage.hidden = Boolean(allowedAuthor);
+  isAllowedPublisher = Boolean(allowedAuthor);
+  updateForm.hidden = !isAllowedPublisher;
+  accessMessage.hidden = isAllowedPublisher;
   accessMessage.textContent = 'Your account can read updates but is not on the publishing allowlist.';
+  renderUpdates();
 };
 
 signIn?.addEventListener('click', async () => {
@@ -140,6 +202,8 @@ signOut?.addEventListener('click', async () => {
   await supabaseClient.auth.signOut();
   updateAuthUi(null);
 });
+
+cancelUpdate?.addEventListener('click', resetUpdateForm);
 
 updateForm?.addEventListener('submit', (event) => {
   event.preventDefault();
@@ -161,7 +225,7 @@ updateForm?.addEventListener('submit', (event) => {
 
     submitButton.disabled = true;
     submitButton.setAttribute('aria-busy', 'true');
-    let imageUrl = null;
+    let imageUrl = editingUpdate?.image_url || null;
     let imagePath = null;
     try {
       if (image?.size) {
@@ -173,14 +237,16 @@ updateForm?.addEventListener('submit', (event) => {
         imageUrl = supabaseClient.storage.from('project-updates').getPublicUrl(imagePath).data.publicUrl;
       }
 
-      const { error } = await supabaseClient.from('project_updates').insert({
-        repo_full_name: repositoryName,
-        title,
-        body: body || null,
-        image_url: imageUrl,
-        author_id: currentSession.user.id
-      });
+      const updateData = { title, body: body || null, image_url: imageUrl };
+      const query = editingUpdate
+        ? supabaseClient.from('project_updates').update(updateData).eq('id', editingUpdate.id)
+        : supabaseClient.from('project_updates').insert({ ...updateData, repo_full_name: repositoryName, author_id: currentSession.user.id });
+      const { error } = await query;
       if (error) throw error;
+      if (editingUpdate?.image_url && imagePath && editingUpdate.image_url !== imageUrl) {
+        const oldImagePath = imagePathFromUrl(editingUpdate.image_url);
+        if (oldImagePath) await supabaseClient.storage.from('project-updates').remove([decodeURIComponent(oldImagePath)]);
+      }
     } catch (error) {
       if (imagePath) await supabaseClient.storage.from('project-updates').remove([imagePath]);
       accessMessage.hidden = false;
@@ -189,7 +255,7 @@ updateForm?.addEventListener('submit', (event) => {
       submitButton.removeAttribute('aria-busy');
       return;
     }
-    updateForm.reset();
+    resetUpdateForm();
     submitButton.disabled = false;
     submitButton.removeAttribute('aria-busy');
     renderUpdates();
