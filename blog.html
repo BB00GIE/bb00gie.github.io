@@ -41,10 +41,11 @@
         <label for="update-title">Update title</label>
         <input id="update-title" name="title" type="text" maxlength="120" placeholder="What changed?" required>
         <label for="update-body">Update</label>
-        <textarea id="update-body" name="body" rows="7" placeholder="Write a note about this project..."></textarea>
+        <textarea id="update-body" name="body" rows="7" lang="en-US" spellcheck="true" placeholder="Write a note about this project..."></textarea>
         <label for="update-image">Image</label>
         <input id="update-image" name="image" type="file" accept="image/*">
-        <p class="form-hint">Add a note, an image, or both. Images must be 5 MB or smaller.</p>
+        <p class="form-hint">Add a note, an image, or both. Use Link("url", "replacement text") to create a named link. Spelling is reviewed before publishing. Images must be 5 MB or smaller.</p>
+        <p id="publish-feedback" class="publish-feedback" role="status" hidden></p>
         <div class="update-form-actions">
           <button type="submit">Publish update <span aria-hidden="true">+</span></button>
           <button id="update-cancel" class="button-secondary" type="button" hidden>Cancel</button>
