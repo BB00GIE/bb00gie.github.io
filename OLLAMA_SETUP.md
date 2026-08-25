@@ -8,7 +8,7 @@ The private experience page can generate a resume profile summary from selected 
 2. Pull a local model, for example:
 
 ```powershell
-ollama pull llama3.2
+ollama pull gemma4:26b
 ```
 
 3. Start Ollama. Its default API endpoint is `http://127.0.0.1:11434/api/generate`.
@@ -21,7 +21,7 @@ The default model and endpoint are defined in `experience.js` through `RESUME_AI
 <script>
   window.RESUME_AI_CONFIG = {
     endpoint: 'http://127.0.0.1:11434/api/generate',
-    model: 'llama3.2'
+    model: 'gemma4:26b'
   };
 </script>
 ```
