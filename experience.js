@@ -124,7 +124,11 @@ const generateSummaryDraft = async () => {
     saveSummary.hidden = false;
     showSummaryMessage('Draft generated. Review every claim before saving.');
   } catch (error) {
-    showSummaryMessage('Ollama could not generate a draft. Confirm it is running locally and try again.');
+    console.error('Ollama summary generation failed:', error);
+    const detail = error instanceof TypeError
+      ? 'The browser could not reach Ollama. Check that ollama serve is running and allows this site origin.'
+      : error.message;
+    showSummaryMessage(`Ollama could not generate a draft. ${detail}`);
   } finally {
     generateSummary.disabled = false;
   }
