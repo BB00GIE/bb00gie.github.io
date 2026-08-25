@@ -23,7 +23,9 @@ create table if not exists public.work_experience (
   end_date date,
   description text,
   highlights text[] not null default '{}',
+  lessons_learned text[] not null default '{}',
   technologies text[] not null default '{}',
+  source_repo text,
   sort_order integer not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -32,6 +34,8 @@ create table if not exists public.work_experience (
 
 alter table public.project_updates alter column body drop not null;
 alter table public.project_updates add column if not exists image_url text;
+alter table public.work_experience add column if not exists lessons_learned text[] not null default '{}';
+alter table public.work_experience add column if not exists source_repo text;
 
 do $$
 begin
