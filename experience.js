@@ -214,14 +214,36 @@ const getProjectUpdates = async () => {
   return data || [];
 };
 
-const synthesizeProject = (repo, updates) => {
+const getRepositoryActivity = async (repo) => {
+  const [commitsResponse, pullRequestsResponse] = await Promise.all([
+    fetch(`https://api.github.com/repos/${repo.full_name}/commits?per_page=10`),
+    fetch(`https://api.github.com/repos/${repo.full_name}/pulls?state=all&per_page=10`)
+  ]);
+  const commits = commitsResponse.ok ? await commitsResponse.json() : [];
+  const pullRequests = pullRequestsResponse.ok ? await pullRequestsResponse.json() : [];
+  return {
+    commits: commits.map((commit) => commit.commit?.message?.split('\n')[0]?.slice(0, 240)).filter(Boolean),
+    pullRequests: pullRequests.map((pullRequest) => ({
+      title: pullRequest.title,
+      body: pullRequest.body?.trim().slice(0, 240)
+    })).filter((pullRequest) => pullRequest.title)
+  };
+};
+
+const synthesizeProject = (repo, updates, activity) => {
   const repoUpdates = updates.filter((update) => update.repo_full_name === repo.full_name || update.repo_full_name.startsWith(`${repo.full_name}_`));
   const updateText = repoUpdates.map((update) => `${update.title}${update.body ? `: ${update.body}` : ''}`).join(' ');
+  const commitHighlights = activity.commits.slice(0, 5).map((message) => `Commit: ${message}`);
+  const pullRequestHighlights = activity.pullRequests.slice(0, 5).map((pullRequest) => `PR: ${pullRequest.title}${pullRequest.body ? ` - ${pullRequest.body}` : ''}`);
   const description = repo.description || `Built and maintained ${repo.name} as an independent software project.`;
-  const highlights = repoUpdates.slice(0, 5).map((update) => `${update.title}${update.body ? ` - ${update.body}` : ''}`);
-  const lessons = repoUpdates.length
-    ? [`Documented project decisions and progress through ${repoUpdates.length} project journal ${repoUpdates.length === 1 ? 'entry' : 'entries'}.`, updateText.slice(0, 240)]
-    : ['Practiced taking a software project from idea to a working implementation.'];
+  const updateHighlights = repoUpdates.slice(0, 5).map((update) => `Journal: ${update.title}${update.body ? ` - ${update.body}` : ''}`);
+  const highlights = [...updateHighlights, ...pullRequestHighlights, ...commitHighlights].slice(0, 10);
+  const lessons = [
+    repoUpdates.length ? `Documented project decisions and progress through ${repoUpdates.length} project journal ${repoUpdates.length === 1 ? 'entry' : 'entries'}.` : null,
+    activity.pullRequests.length ? `Practiced breaking work into ${activity.pullRequests.length} pull request ${activity.pullRequests.length === 1 ? 'review' : 'reviews'}.` : null,
+    activity.commits.length ? `Built iteratively through ${activity.commits.length} recent commits, using version control to refine the project.` : null,
+    updateText.slice(0, 240)
+  ].filter(Boolean).slice(0, 4);
   return {
     company: 'GitHub project',
     role: repo.name.replace(/[-_]/g, ' '),
@@ -230,7 +252,7 @@ const synthesizeProject = (repo, updates) => {
     end_date: null,
     description,
     highlights: highlights.length ? highlights : [description],
-    lessons_learned: lessons,
+    lessons_learned: lessons.length ? lessons : ['Practiced taking a software project from idea to a working implementation.'],
     technologies: [repo.language, ...(repo.topics || [])].filter(Boolean).slice(0, 8),
     source_repo: repo.html_url,
     sort_order: 100
@@ -246,9 +268,11 @@ const synthesizeRepositoryEntries = async () => {
     ]);
     if (!reposResponse.ok) throw new Error(`GitHub returned ${reposResponse.status}`);
     const repos = (await reposResponse.json()).filter((repo) => !repo.fork && !repo.private && repo.visibility === 'public');
-    const newEntries = repos
-      .filter((repo) => !experiences.some((experience) => experience.source_repo === repo.html_url))
-      .map((repo) => synthesizeProject(repo, updates));
+    const newRepos = repos.filter((repo) => !experiences.some((experience) => experience.source_repo === repo.html_url));
+    const activity = await Promise.all(newRepos.map(async (repo) => {
+      try { return await getRepositoryActivity(repo); } catch (error) { return { commits: [], pullRequests: [] }; }
+    }));
+    const newEntries = newRepos.map((repo, index) => synthesizeProject(repo, updates, activity[index]));
     if (!newEntries.length) { showMessage('GitHub project entries are already loaded.'); return; }
     const { error } = await supabaseClient.from('work_experience').insert(newEntries);
     if (error) { showMessage('GitHub projects could not be synthesized.'); return; }
