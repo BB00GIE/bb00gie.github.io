@@ -97,7 +97,7 @@ const updateSummarySourceCount = () => {
   summarySourceCount.textContent = `${count} selected project${count === 1 ? '' : 's'} will be summarized.`;
 };
 
-const generateSummaryDraft = async () => {
+const generateSummaryDraft = async (openPreview = false) => {
   const projects = selectedProjects();
   if (!projects.length) { showSummaryMessage('Select at least one GitHub project for the summary.'); return; }
   generateSummary.disabled = true;
@@ -123,6 +123,10 @@ const generateSummaryDraft = async () => {
     summaryReviewLabel.hidden = false;
     saveSummary.hidden = false;
     showSummaryMessage('Draft generated. Review every claim before saving.');
+    if (openPreview) {
+      sessionStorage.setItem('resumePreviewSummary', draft);
+      window.open('resume.html', '_blank', 'noopener');
+    }
   } catch (error) {
     console.error('Ollama summary generation failed:', error);
     const detail = error instanceof TypeError
@@ -462,7 +466,7 @@ generateResume?.addEventListener('click', () => {
   }
   summaryGenerator.hidden = false;
   summaryGenerator.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  generateSummaryDraft();
+  generateSummaryDraft(true);
 });
 generateSummary?.addEventListener('click', generateSummaryDraft);
 saveSummary?.addEventListener('click', saveApprovedSummary);

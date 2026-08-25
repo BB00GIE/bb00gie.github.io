@@ -41,4 +41,4 @@ The default model and endpoint are defined in `experience.js` through `RESUME_AI
 </script>
 ```
 
-The browser must be allowed to reach Ollama from the page origin. If a browser blocks the request due to CORS, run the site through a local web server and configure Ollama for the local origin, or use an OpenAI-compatible local runtime with its CORS support enabled.
+The browser must be allowed to reach Ollama from the page origin. Some regular browsers block a hosted HTTPS page from reaching a local HTTP service even when Ollama CORS is configured. The VS Code built-in browser allows this local workflow; alternatively, run the site through a local web server and open `http://localhost:5500/experience.html` directly. The public GitHub Pages URL remains a read-only viewer for browsers that block local connections.

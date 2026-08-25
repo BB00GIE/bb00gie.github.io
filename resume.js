@@ -74,7 +74,14 @@ const loadExperience = async () => {
 };
 
 const loadSummary = async () => {
-  if (!supabaseClient || !summaryTarget) return;
+  if (!summaryTarget) return;
+  const previewSummary = sessionStorage.getItem('resumePreviewSummary');
+  if (previewSummary) {
+    summaryTarget.textContent = previewSummary;
+    sessionStorage.removeItem('resumePreviewSummary');
+    return;
+  }
+  if (!supabaseClient) return;
   const { data, error } = await supabaseClient.from('resume_profile').select('summary').eq('id', 1).maybeSingle();
   if (!error && data?.summary) summaryTarget.textContent = data.summary;
 };
