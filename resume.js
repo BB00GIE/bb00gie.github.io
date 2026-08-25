@@ -42,13 +42,14 @@ const renderExperience = (experiences) => {
   });
 };
 
-const renderProjects = (projects) => {
+const renderProjects = (projects, previewProjects = null) => {
   if (!projectTarget) return;
+  const previewBullets = new Map((previewProjects || []).map((project) => [project.id, project.bullets]));
   projectTarget.replaceChildren();
   projects.forEach((project) => {
     const article = createElement('article', 'resume-project');
     article.append(createElement('h3', '', project.role));
-    const bullets = (project.resume_bullets || []).filter(Boolean).slice(0, 5);
+    const bullets = (previewBullets.get(project.id) || project.resume_bullets || []).filter(Boolean).slice(0, 5);
     if (bullets.length) {
       const list = createElement('ul');
       bullets.forEach((bullet) => list.append(createElement('li', '', bullet)));
@@ -62,6 +63,9 @@ const renderProjects = (projects) => {
 
 const loadExperience = async () => {
   if (!supabaseClient || !experienceTarget) return;
+  const preview = new URLSearchParams(window.location.search).has('preview')
+    ? JSON.parse(localStorage.getItem('resumePreview') || 'null')
+    : null;
   const { data, error } = await supabaseClient
     .from('work_experience')
     .select('company, role, location, start_date, end_date, description, highlights, resume_bullets, source_repo, include_in_resume, sort_order')
@@ -69,15 +73,17 @@ const loadExperience = async () => {
     .order('start_date', { ascending: false });
   if (!error && data?.length) {
     renderExperience(data.filter((experience) => !experience.source_repo));
-    renderProjects(data.filter((experience) => experience.source_repo && experience.include_in_resume !== false));
+    renderProjects(data.filter((experience) => experience.source_repo && experience.include_in_resume !== false), preview?.projects);
   }
 };
 
 const loadSummary = async () => {
   if (!summaryTarget) return;
-  const previewSummary = new URLSearchParams(window.location.search).get('previewSummary');
-  if (previewSummary) {
-    summaryTarget.textContent = previewSummary;
+  const preview = new URLSearchParams(window.location.search).has('preview')
+    ? JSON.parse(localStorage.getItem('resumePreview') || 'null')
+    : null;
+  if (preview?.summary) {
+    summaryTarget.textContent = preview.summary;
     return;
   }
   if (!supabaseClient) return;

@@ -27,6 +27,7 @@ const resumeAiConfig = window.RESUME_AI_CONFIG || { endpoint: 'http://127.0.0.1:
 let editingExperience = null;
 let experiences = [];
 let currentSession = null;
+let generatedProjectBullets = [];
 const resumeExperiences = [
   {
     company: 'Google',
@@ -86,6 +87,7 @@ const showSummaryMessage = (message) => {
 const selectedProjects = () => experiences
   .filter((experience) => experience.source_repo && experience.include_in_resume !== false)
   .map((project) => ({
+    id: project.id,
     name: project.role,
     description: project.description,
     bullets: (project.resume_bullets || []).slice(0, 5),
@@ -112,19 +114,27 @@ const generateSummaryDraft = async (openPreview = false) => {
         model: resumeAiConfig.model,
         stream: false,
         format: 'json',
-        prompt: `Write a concise, resume-ready professional profile summary in 2-3 sentences. Use only the supplied project facts. Do not invent metrics, employers, job titles, dates, technologies, users, or outcomes. Return JSON only in this exact shape: {"summary":"..."}. Project facts:\n${JSON.stringify(projects)}`
+        prompt: `Create a resume draft using only the supplied project facts. Write a concise professional profile summary in 2-3 sentences. For every project, rewrite its supplied bullets into 1-3 concise resume bullets. Do not invent metrics, employers, job titles, dates, technologies, users, or outcomes. Return JSON only in this exact shape: {"summary":"...","projects":[{"id":"project id","bullets":["bullet 1"]}]}. Include every project exactly once, preserve each project id, and return between 1 and 3 bullets per project. Project facts:\n${JSON.stringify(projects)}`
       })
     });
     if (!response.ok) throw new Error(`Ollama returned ${response.status}`);
     const result = await response.json();
-    const draft = JSON.parse(result.response || '{}').summary?.trim();
+    const generated = JSON.parse(result.response || '{}');
+    const draft = generated.summary?.trim();
+    generatedProjectBullets = projects.map((project) => {
+      const generatedProject = generated.projects?.find((item) => item.id === project.id);
+      const bullets = (generatedProject?.bullets || []).filter((bullet) => typeof bullet === 'string' && bullet.trim()).slice(0, 3);
+      if (!bullets.length) throw new Error(`The model did not return bullets for ${project.name}.`);
+      return { id: project.id, bullets };
+    });
     if (!draft || draft.length > 700) throw new Error('The model returned an unusable summary.');
     summaryReview.value = draft;
     summaryReviewLabel.hidden = false;
     saveSummary.hidden = false;
     showSummaryMessage('Draft generated. Review every claim before saving.');
     if (openPreview) {
-      const previewUrl = `resume.html?previewSummary=${encodeURIComponent(draft)}`;
+      localStorage.setItem('resumePreview', JSON.stringify({ summary: draft, projects: generatedProjectBullets }));
+      const previewUrl = `resume.html?preview=${Date.now()}`;
       window.open(previewUrl, '_blank', 'noopener');
     }
   } catch (error) {
@@ -143,8 +153,16 @@ const saveApprovedSummary = async () => {
   if (!summary || summary.length > 700) { showSummaryMessage('Enter a summary between 1 and 700 characters.'); return; }
   saveSummary.disabled = true;
   const { error } = await supabaseClient.from('resume_profile').upsert({ id: 1, summary, updated_by: currentSession.user.id, updated_at: new Date().toISOString() });
-  if (error) showSummaryMessage('The approved summary could not be saved. Run the Supabase schema first.');
-  else showSummaryMessage('Approved summary saved to your resume.');
+  if (error) {
+    showSummaryMessage('The approved summary could not be saved. Run the Supabase schema first.');
+  } else {
+    const projectUpdates = generatedProjectBullets.map(({ id, bullets }) => (
+      supabaseClient.from('work_experience').update({ resume_bullets: bullets }).eq('id', id)
+    ));
+    const results = await Promise.all(projectUpdates);
+    if (results.some((result) => result.error)) showSummaryMessage('Summary saved, but some project bullets could not be updated.');
+    else showSummaryMessage('Approved summary and project bullets saved to your resume.');
+  }
   saveSummary.disabled = false;
 };
 
