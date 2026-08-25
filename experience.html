@@ -28,11 +28,22 @@
       <p id="access-message" class="access-message" hidden></p>
     </section>
     <section id="experience-content" class="experience-content section-wrap">
-      <div class="section-heading"><p class="eyebrow">Career record</p><p id="experience-count" class="section-note">0 entries</p></div>
+      <div class="section-heading"><p class="eyebrow">Career record</p><div class="experience-heading-actions"><p id="experience-count" class="section-note">0 entries</p><button id="generate-resume" class="button-secondary" type="button">Generate resume <span aria-hidden="true">↗</span></button></div></div>
       <form id="experience-form" class="experience-form" hidden>
         <p id="form-heading" class="eyebrow">New role</p>
         <button id="import-resume" class="button-secondary" type="button">Import resume entries <span aria-hidden="true">↓</span></button>
         <button id="synthesize-repos" class="button-secondary" type="button">Synthesize GitHub projects <span aria-hidden="true">+</span></button>
+        <section id="summary-generator" class="summary-generator" hidden>
+          <p class="eyebrow">Local AI resume summary</p>
+          <p class="form-hint">Only selected GitHub projects are sent to your local Ollama model. Review the draft before saving.</p>
+          <p id="summary-source-count" class="summary-source-count"></p>
+          <div class="update-form-actions">
+            <button id="generate-summary" type="button">Generate summary <span aria-hidden="true">*</span></button>
+            <button id="save-summary" class="button-secondary" type="button" hidden>Save approved summary <span aria-hidden="true">+</span></button>
+          </div>
+          <label id="summary-review-label" hidden>Review draft<textarea id="summary-review" rows="5" maxlength="700"></textarea></label>
+          <p id="summary-message" class="publish-feedback" role="status" hidden></p>
+        </section>
         <div class="experience-form-grid">
           <label>Company<input name="company" type="text" maxlength="160" required></label>
           <label>Role<input name="role" type="text" maxlength="160" required></label>
@@ -42,6 +53,8 @@
         </div>
         <label>Description<textarea name="description" rows="4"></textarea></label>
         <label>Highlights <span class="form-hint">One item per line</span><textarea name="highlights" rows="5"></textarea></label>
+        <label class="resume-option"><input name="include_in_resume" type="checkbox" checked> Include in generated resume</label>
+        <label>Resume bullets <span class="form-hint">Up to 5 bullets; each must be 1-2 sentences</span><textarea name="resume_bullets" rows="5" maxlength="1400" placeholder="One bullet per line"></textarea></label>
         <label>Things learned <span class="form-hint">One item per line</span><textarea name="lessons_learned" rows="4"></textarea></label>
         <label>Technologies <span class="form-hint">Comma-separated</span><input name="technologies" type="text"></label>
         <label>Source repository<input name="source_repo" type="url" placeholder="https://github.com/..."></label>
