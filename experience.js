@@ -187,22 +187,42 @@ const deleteExperience = async (id) => {
   await loadExperiences();
 };
 
+const syncExperienceEntries = async (entries, matchesEntry) => {
+  let inserted = 0;
+  let updated = 0;
+  let removed = 0;
+  for (const entry of entries) {
+    const matches = experiences.filter((experience) => matchesEntry(experience, entry));
+    if (matches.length) {
+      const { error } = await supabaseClient.from('work_experience').update(entry).eq('id', matches[0].id);
+      if (error) throw error;
+      updated += 1;
+      for (const duplicate of matches.slice(1)) {
+        const { error: deleteError } = await supabaseClient.from('work_experience').delete().eq('id', duplicate.id);
+        if (deleteError) throw deleteError;
+        removed += 1;
+      }
+    } else {
+      const { error } = await supabaseClient.from('work_experience').insert(entry);
+      if (error) throw error;
+      inserted += 1;
+    }
+  }
+  return { inserted, updated, removed };
+};
+
 const importResumeEntries = async () => {
   importResume.disabled = true;
   try {
-    const newEntries = resumeExperiences.filter((resumeExperience) => !experiences.some((experience) => (
-      experience.company === resumeExperience.company
-      && experience.role === resumeExperience.role
-      && experience.start_date === resumeExperience.start_date
-    )));
-    if (!newEntries.length) {
-      showMessage('Resume entries are already loaded.');
-      return;
-    }
-    const { error } = await supabaseClient.from('work_experience').insert(newEntries);
-    if (error) { showMessage('Resume entries could not be imported.'); return; }
+    const result = await syncExperienceEntries(resumeExperiences, (experience, entry) => (
+      experience.company === entry.company
+      && experience.role === entry.role
+      && experience.start_date === entry.start_date
+    ));
     await loadExperiences();
-    showMessage(`${newEntries.length} resume ${newEntries.length === 1 ? 'entry' : 'entries'} imported. Review and edit them below.`);
+    showMessage(`Resume synced: ${result.inserted} added, ${result.updated} updated, ${result.removed} duplicate${result.removed === 1 ? '' : 's'} removed.`);
+  } catch (error) {
+    showMessage('Resume entries could not be synced.');
   } finally {
     importResume.disabled = false;
   }
@@ -259,6 +279,19 @@ const synthesizeProject = (repo, updates, activity) => {
   };
 };
 
+const removeUnavailableRepositoryEntries = async (repos) => {
+  const publicRepositoryUrls = new Set(repos.map((repo) => repo.html_url.replace(/\/$/, '')));
+  const unavailableEntries = experiences.filter((experience) => {
+    const sourceRepo = experience.source_repo?.replace(/\/$/, '');
+    return sourceRepo?.startsWith('https://github.com/BB00GIE/') && !publicRepositoryUrls.has(sourceRepo);
+  });
+  for (const entry of unavailableEntries) {
+    const { error } = await supabaseClient.from('work_experience').delete().eq('id', entry.id);
+    if (error) throw error;
+  }
+  return unavailableEntries.length;
+};
+
 const synthesizeRepositoryEntries = async () => {
   synthesizeRepos.disabled = true;
   try {
@@ -268,16 +301,15 @@ const synthesizeRepositoryEntries = async () => {
     ]);
     if (!reposResponse.ok) throw new Error(`GitHub returned ${reposResponse.status}`);
     const repos = (await reposResponse.json()).filter((repo) => !repo.fork && !repo.private && repo.visibility === 'public');
-    const newRepos = repos.filter((repo) => !experiences.some((experience) => experience.source_repo === repo.html_url));
-    const activity = await Promise.all(newRepos.map(async (repo) => {
+    const unavailableCount = await removeUnavailableRepositoryEntries(repos);
+    const activity = await Promise.all(repos.map(async (repo) => {
       try { return await getRepositoryActivity(repo); } catch (error) { return { commits: [], pullRequests: [] }; }
     }));
-    const newEntries = newRepos.map((repo, index) => synthesizeProject(repo, updates, activity[index]));
-    if (!newEntries.length) { showMessage('GitHub project entries are already loaded.'); return; }
-    const { error } = await supabaseClient.from('work_experience').insert(newEntries);
-    if (error) { showMessage('GitHub projects could not be synthesized.'); return; }
+    const entries = repos.map((repo, index) => synthesizeProject(repo, updates, activity[index]));
+    const result = await syncExperienceEntries(entries, (experience, entry) => experience.source_repo === entry.source_repo);
     await loadExperiences();
-    showMessage(`${newEntries.length} GitHub project ${newEntries.length === 1 ? 'entry' : 'entries'} synthesized. Review and edit them below.`);
+    const removedCount = unavailableCount + result.removed;
+    showMessage(`GitHub projects synced: ${result.inserted} added, ${result.updated} updated, ${removedCount} duplicate or unavailable ${removedCount === 1 ? 'entry' : 'entries'} removed.`);
   } catch (error) {
     showMessage('GitHub projects or project updates could not be loaded right now.');
   } finally {
