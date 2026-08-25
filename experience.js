@@ -15,8 +15,18 @@ const formMessage = document.querySelector('#form-message');
 const cancelEdit = document.querySelector('#cancel-edit');
 const importResume = document.querySelector('#import-resume');
 const synthesizeRepos = document.querySelector('#synthesize-repos');
+const generateResume = document.querySelector('#generate-resume');
+const summaryGenerator = document.querySelector('#summary-generator');
+const generateSummary = document.querySelector('#generate-summary');
+const saveSummary = document.querySelector('#save-summary');
+const summaryReview = document.querySelector('#summary-review');
+const summaryReviewLabel = document.querySelector('#summary-review-label');
+const summarySourceCount = document.querySelector('#summary-source-count');
+const summaryMessage = document.querySelector('#summary-message');
+const resumeAiConfig = window.RESUME_AI_CONFIG || { endpoint: 'http://127.0.0.1:11434/api/generate', model: 'gemma4:26b' };
 let editingExperience = null;
 let experiences = [];
+let currentSession = null;
 const resumeExperiences = [
   {
     company: 'Google',
@@ -68,6 +78,76 @@ const showMessage = (message) => {
   formMessage.textContent = message;
 };
 
+const showSummaryMessage = (message) => {
+  summaryMessage.hidden = false;
+  summaryMessage.textContent = message;
+};
+
+const selectedProjects = () => experiences
+  .filter((experience) => experience.source_repo && experience.include_in_resume !== false)
+  .map((project) => ({
+    name: project.role,
+    description: project.description,
+    bullets: (project.resume_bullets || []).slice(0, 5),
+    technologies: project.technologies || []
+  }));
+
+const updateSummarySourceCount = () => {
+  const count = selectedProjects().length;
+  summarySourceCount.textContent = `${count} selected project${count === 1 ? '' : 's'} will be summarized.`;
+};
+
+const generateSummaryDraft = async () => {
+  const projects = selectedProjects();
+  if (!projects.length) { showSummaryMessage('Select at least one GitHub project for the summary.'); return; }
+  generateSummary.disabled = true;
+  saveSummary.hidden = true;
+  summaryReviewLabel.hidden = true;
+  showSummaryMessage('Connecting to your local Ollama model...');
+  try {
+    const response = await fetch(resumeAiConfig.endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: resumeAiConfig.model,
+        stream: false,
+        format: 'json',
+        prompt: `Write a concise, resume-ready professional profile summary in 2-3 sentences. Use only the supplied project facts. Do not invent metrics, employers, job titles, dates, technologies, users, or outcomes. Return JSON only in this exact shape: {"summary":"..."}. Project facts:\n${JSON.stringify(projects)}`
+      })
+    });
+    if (!response.ok) throw new Error(`Ollama returned ${response.status}`);
+    const result = await response.json();
+    const draft = JSON.parse(result.response || '{}').summary?.trim();
+    if (!draft || draft.length > 700) throw new Error('The model returned an unusable summary.');
+    summaryReview.value = draft;
+    summaryReviewLabel.hidden = false;
+    saveSummary.hidden = false;
+    showSummaryMessage('Draft generated. Review every claim before saving.');
+  } catch (error) {
+    showSummaryMessage('Ollama could not generate a draft. Confirm it is running locally and try again.');
+  } finally {
+    generateSummary.disabled = false;
+  }
+};
+
+const saveApprovedSummary = async () => {
+  const summary = summaryReview.value.trim();
+  if (!summary || summary.length > 700) { showSummaryMessage('Enter a summary between 1 and 700 characters.'); return; }
+  saveSummary.disabled = true;
+  const { error } = await supabaseClient.from('resume_profile').upsert({ id: 1, summary, updated_by: currentSession.user.id, updated_at: new Date().toISOString() });
+  if (error) showSummaryMessage('The approved summary could not be saved. Run the Supabase schema first.');
+  else showSummaryMessage('Approved summary saved to your resume.');
+  saveSummary.disabled = false;
+};
+
+const getResumeBullets = (value) => value.split('\n').map((item) => item.trim()).filter(Boolean);
+
+const validateResumeBullets = (bullets) => {
+  if (bullets.length > 5) return 'Use no more than 5 resume bullets per project.';
+  const invalidBullet = bullets.find((bullet) => (bullet.match(/[.!?]+(?=\s|$)/g) || []).length > 2);
+  return invalidBullet ? 'Each resume bullet must be 1-2 sentences.' : null;
+};
+
 const resetForm = () => {
   editingExperience = null;
   experienceForm.reset();
@@ -85,6 +165,7 @@ const formatDate = (value) => {
 
 const renderExperiences = () => {
   experienceCount.textContent = `${experiences.length} ${experiences.length === 1 ? 'entry' : 'entries'}`;
+  updateSummarySourceCount();
   experienceList.replaceChildren();
   if (!experiences.length) {
     const empty = document.createElement('p');
@@ -138,6 +219,14 @@ const renderExperiences = () => {
       article.append(tags);
     }
     if (experience.source_repo) {
+      const resumeNote = document.createElement('p');
+      resumeNote.className = 'experience-resume-note';
+      resumeNote.textContent = experience.include_in_resume === false
+        ? 'Excluded from generated resume.'
+        : `${(experience.resume_bullets?.length || experience.highlights?.length || 0)} resume bullet${(experience.resume_bullets?.length || experience.highlights?.length || 0) === 1 ? '' : 's'} selected.`;
+      article.append(resumeNote);
+    }
+    if (experience.source_repo) {
       const source = document.createElement('a');
       source.className = 'text-link';
       source.href = experience.source_repo;
@@ -172,9 +261,10 @@ const beginEdit = (experience) => {
   Object.entries(experience).forEach(([key, value]) => {
     if (!experienceForm.elements[key]) return;
     experienceForm.elements[key].value = Array.isArray(value)
-      ? (key === 'highlights' ? value.join('\n') : value.join(', '))
+      ? (key === 'highlights' || key === 'resume_bullets' ? value.join('\n') : value.join(', '))
       : (key.endsWith('_date') && value ? value.slice(0, 7) : value || '');
   });
+  experienceForm.elements.include_in_resume.checked = experience.include_in_resume !== false;
   formHeading.textContent = 'Edit role';
   cancelEdit.hidden = false;
   experienceForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -273,6 +363,7 @@ const synthesizeProject = (repo, updates, activity) => {
     description,
     highlights: highlights.length ? highlights : [description],
     lessons_learned: lessons.length ? lessons : ['Practiced taking a software project from idea to a working implementation.'],
+    resume_bullets: highlights.slice(0, 5),
     technologies: [repo.language, ...(repo.topics || [])].filter(Boolean).slice(0, 8),
     source_repo: repo.html_url,
     sort_order: 100
@@ -318,11 +409,13 @@ const synthesizeRepositoryEntries = async () => {
 };
 
 const updateAuthUi = async (session) => {
+  currentSession = session;
   if (!session) {
     authStatus.textContent = supabaseClient ? 'Public experience record. Sign in to manage it.' : 'Supabase is not configured yet.';
     signIn.hidden = !supabaseClient;
     signOut.hidden = true;
     experienceForm.hidden = true;
+    summaryGenerator.hidden = true;
     if (supabaseClient) {
       try { await loadExperiences(); } catch (loadError) { showMessage('Saved experience could not load right now.'); }
     }
@@ -334,6 +427,7 @@ const updateAuthUi = async (session) => {
   const { data: allowedAuthor, error } = await supabaseClient.from('allowed_authors').select('user_id').eq('user_id', session.user.id).eq('github_username', 'BB00GIE').maybeSingle();
   if (error || !allowedAuthor) {
     experienceForm.hidden = true;
+    summaryGenerator.hidden = true;
     accessMessage.hidden = false;
     accessMessage.textContent = error ? 'Access could not be checked. Run the Supabase schema first.' : 'You can view this record, but only Brandon can update it.';
     try { await loadExperiences(); } catch (loadError) { showMessage('Saved experience could not load right now.'); }
@@ -341,6 +435,7 @@ const updateAuthUi = async (session) => {
   }
   accessMessage.hidden = true;
   experienceForm.hidden = false;
+  summaryGenerator.hidden = false;
   try { await loadExperiences(); } catch (loadError) { showMessage('Saved experience could not load right now.'); }
 };
 
@@ -356,6 +451,9 @@ signOut?.addEventListener('click', async () => {
 cancelEdit?.addEventListener('click', resetForm);
 importResume?.addEventListener('click', importResumeEntries);
 synthesizeRepos?.addEventListener('click', synthesizeRepositoryEntries);
+generateResume?.addEventListener('click', () => window.open('resume.html', '_blank', 'noopener'));
+generateSummary?.addEventListener('click', generateSummaryDraft);
+saveSummary?.addEventListener('click', saveApprovedSummary);
 
 experienceForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -371,8 +469,14 @@ experienceForm?.addEventListener('submit', async (event) => {
     lessons_learned: formData.get('lessons_learned').split('\n').map((item) => item.trim()).filter(Boolean),
     technologies: formData.get('technologies').split(',').map((item) => item.trim()).filter(Boolean),
     source_repo: formData.get('source_repo').trim() || null,
+    include_in_resume: formData.get('include_in_resume') === 'on',
+    resume_bullets: getResumeBullets(formData.get('resume_bullets')),
     sort_order: Number.parseInt(formData.get('sort_order'), 10) || 0
   };
+  if (payload.source_repo) {
+    const bulletError = validateResumeBullets(payload.resume_bullets);
+    if (bulletError) { showMessage(bulletError); return; }
+  }
   const query = editingExperience
     ? supabaseClient.from('work_experience').update(payload).eq('id', editingExperience.id)
     : supabaseClient.from('work_experience').insert(payload);
