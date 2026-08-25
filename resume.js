@@ -75,10 +75,9 @@ const loadExperience = async () => {
 
 const loadSummary = async () => {
   if (!summaryTarget) return;
-  const previewSummary = sessionStorage.getItem('resumePreviewSummary');
+  const previewSummary = new URLSearchParams(window.location.search).get('previewSummary');
   if (previewSummary) {
     summaryTarget.textContent = previewSummary;
-    sessionStorage.removeItem('resumePreviewSummary');
     return;
   }
   if (!supabaseClient) return;

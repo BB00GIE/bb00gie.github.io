@@ -124,8 +124,8 @@ const generateSummaryDraft = async (openPreview = false) => {
     saveSummary.hidden = false;
     showSummaryMessage('Draft generated. Review every claim before saving.');
     if (openPreview) {
-      sessionStorage.setItem('resumePreviewSummary', draft);
-      window.open('resume.html', '_blank', 'noopener');
+      const previewUrl = `resume.html?previewSummary=${encodeURIComponent(draft)}`;
+      window.open(previewUrl, '_blank', 'noopener');
     }
   } catch (error) {
     console.error('Ollama summary generation failed:', error);
