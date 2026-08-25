@@ -32,6 +32,7 @@
       <form id="experience-form" class="experience-form" hidden>
         <p id="form-heading" class="eyebrow">New role</p>
         <button id="import-resume" class="button-secondary" type="button">Import resume entries <span aria-hidden="true">↓</span></button>
+        <button id="synthesize-repos" class="button-secondary" type="button">Synthesize GitHub projects <span aria-hidden="true">+</span></button>
         <div class="experience-form-grid">
           <label>Company<input name="company" type="text" maxlength="160" required></label>
           <label>Role<input name="role" type="text" maxlength="160" required></label>
@@ -41,7 +42,9 @@
         </div>
         <label>Description<textarea name="description" rows="4"></textarea></label>
         <label>Highlights <span class="form-hint">One item per line</span><textarea name="highlights" rows="5"></textarea></label>
+        <label>Things learned <span class="form-hint">One item per line</span><textarea name="lessons_learned" rows="4"></textarea></label>
         <label>Technologies <span class="form-hint">Comma-separated</span><input name="technologies" type="text"></label>
+        <label>Source repository<input name="source_repo" type="url" placeholder="https://github.com/..."></label>
         <label>Display order<input name="sort_order" type="number" value="0"></label>
         <p id="form-message" class="publish-feedback" role="status" hidden></p>
         <div class="update-form-actions">
