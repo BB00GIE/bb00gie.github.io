@@ -15,6 +15,21 @@ ollama pull gemma4:26b
 4. Open `experience.html`, sign in as the allowlisted GitHub account, and use **Generate summary**.
 5. Run the `resume_profile` additions in `supabase.sql` before saving an approved summary.
 
+When using the deployed site at `https://bb00gie.github.io`, Ollama must allow that browser origin. In PowerShell, configure the origin once and then fully restart Ollama:
+
+```powershell
+setx OLLAMA_ORIGINS "https://bb00gie.github.io,http://localhost:5500,http://127.0.0.1:5500"
+```
+
+If Ollama is being run directly in a terminal instead of through the desktop app, set it for that terminal before starting the server:
+
+```powershell
+$env:OLLAMA_ORIGINS = 'https://bb00gie.github.io,http://localhost:5500,http://127.0.0.1:5500'
+ollama serve
+```
+
+Only the computer running Ollama can generate the draft. Visitors to the public site cannot use your local model.
+
 The default model and endpoint are defined in `experience.js` through `RESUME_AI_CONFIG`. To override them without changing the generator, define `window.RESUME_AI_CONFIG` before `experience.js` loads:
 
 ```html

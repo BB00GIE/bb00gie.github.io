@@ -451,7 +451,15 @@ signOut?.addEventListener('click', async () => {
 cancelEdit?.addEventListener('click', resetForm);
 importResume?.addEventListener('click', importResumeEntries);
 synthesizeRepos?.addEventListener('click', synthesizeRepositoryEntries);
-generateResume?.addEventListener('click', () => window.open('resume.html', '_blank', 'noopener'));
+generateResume?.addEventListener('click', () => {
+  if (experienceForm.hidden) {
+    window.open('resume.html', '_blank', 'noopener');
+    return;
+  }
+  summaryGenerator.hidden = false;
+  summaryGenerator.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  generateSummaryDraft();
+});
 generateSummary?.addEventListener('click', generateSummaryDraft);
 saveSummary?.addEventListener('click', saveApprovedSummary);
 
