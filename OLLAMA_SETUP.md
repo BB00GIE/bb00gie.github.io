@@ -1,6 +1,8 @@
-# Local resume summary generation
+# Local resume writing assistance
 
-The private experience page can generate a resume profile summary from selected GitHub project records using Ollama. Employer records are not sent to the model. The generated text is a draft and must be reviewed and explicitly saved.
+The private experience page can generate a complete resume draft from all work experience included in the resume using Ollama. **Generate resume** creates a profile summary and synthesizes each role's line-by-line highlights into 3-5 resume bullets, then opens a preview without changing saved data until you approve and save it. Use **Re-word with AI** beside a saved role to generate and review a polished description and resume bullets for that role. Employer records are sent only to your local model.
+
+GitHub repositories are grouped using the same prefix rule as the blog: the portion before the first underscore is the shared project name. For example, `portfolio`, `portfolio_api`, and `portfolio_web` become one work-experience entry, and project updates from all matching repository names are included in that entry.
 
 ## Setup
 
@@ -12,7 +14,7 @@ ollama pull gemma4:26b
 ```
 
 3. Start Ollama. Its default API endpoint is `http://127.0.0.1:11434/api/generate`.
-4. Open `experience.html`, sign in as the allowlisted GitHub account, and use **Generate summary**.
+4. Open `experience.html`, sign in as the allowlisted GitHub account, and use **Re-word with AI** beside a saved role or **Generate resume** for the full resume.
 5. Run the `resume_profile` additions in `supabase.sql` before saving an approved summary.
 
 When using the deployed site at `https://bb00gie.github.io`, Ollama must allow that browser origin. In PowerShell, configure the origin once and then fully restart Ollama:
