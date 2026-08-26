@@ -35,13 +35,17 @@
         <button id="synthesize-repos" class="button-secondary" type="button">Synthesize GitHub projects <span aria-hidden="true">+</span></button>
         <section id="summary-generator" class="summary-generator" hidden>
           <p class="eyebrow">Local AI resume summary</p>
-          <p class="form-hint">Only selected GitHub projects are sent to your local Ollama model. Review the draft before saving.</p>
+          <p class="form-hint">All work experience included in the resume is sent to your local Ollama model. Review the draft before saving.</p>
           <p id="summary-source-count" class="summary-source-count"></p>
           <div class="update-form-actions">
             <button id="generate-summary" type="button">Generate summary <span aria-hidden="true">*</span></button>
             <button id="save-summary" class="button-secondary" type="button" hidden>Save approved summary <span aria-hidden="true">+</span></button>
           </div>
           <label id="summary-review-label" hidden>Review draft<textarea id="summary-review" rows="5" maxlength="700"></textarea></label>
+          <div id="resume-draft-review" class="resume-draft-review" hidden>
+            <p class="eyebrow">Generated experience bullets</p>
+            <div id="resume-draft-roles"></div>
+          </div>
           <p id="summary-message" class="publish-feedback" role="status" hidden></p>
         </section>
         <div class="experience-form-grid">
@@ -53,8 +57,37 @@
         </div>
         <label>Description<textarea name="description" rows="4"></textarea></label>
         <label>Highlights <span class="form-hint">One item per line</span><textarea name="highlights" rows="5"></textarea></label>
+        <section id="experience-generator" class="description-generator" hidden>
+          <div class="bullet-generator-heading">
+            <div>
+              <p class="eyebrow">Resume-ready experience</p>
+              <p class="form-hint">Summarize the highlights into resume bullets and generate a polished description in one pass.</p>
+            </div>
+          </div>
+          <div id="experience-review" class="bullet-review" hidden>
+            <article class="bullet-version">
+              <h3>Original</h3>
+              <p id="original-description"></p>
+              <ul id="original-highlights"></ul>
+              <div id="removed-highlights-review" class="removed-highlights-review" hidden>
+                <h4>Removed as duplicate</h4>
+                <ul id="removed-highlights"></ul>
+              </div>
+            </article>
+            <article class="bullet-version bullet-version-generated">
+              <h3>LLM-generated</h3>
+              <p id="generated-description"></p>
+              <ul id="generated-bullets"></ul>
+              <p id="change-reason" class="change-reason"></p>
+              <div class="update-form-actions">
+                <button id="keep-generated-description" type="button">Keep description</button>
+                <button id="keep-generated-bullets" type="button">Keep bullets</button>
+              </div>
+            </article>
+          </div>
+          <p id="experience-message" class="publish-feedback" role="status" hidden></p>
+        </section>
         <label class="resume-option"><input name="include_in_resume" type="checkbox" checked> Include in generated resume</label>
-        <label>Resume bullets <span class="form-hint">Up to 5 bullets; each must be 1-2 sentences</span><textarea name="resume_bullets" rows="5" maxlength="1400" placeholder="One bullet per line"></textarea></label>
         <label>Things learned <span class="form-hint">One item per line</span><textarea name="lessons_learned" rows="4"></textarea></label>
         <label>Technologies <span class="form-hint">Comma-separated</span><input name="technologies" type="text"></label>
         <label>Source repository<input name="source_repo" type="url" placeholder="https://github.com/..."></label>
