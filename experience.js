@@ -25,12 +25,15 @@ const summarySourceCount = document.querySelector('#summary-source-count');
 const summaryMessage = document.querySelector('#summary-message');
 const resumeDraftReview = document.querySelector('#resume-draft-review');
 const resumeDraftRoles = document.querySelector('#resume-draft-roles');
-const resumeAiConfig = window.RESUME_AI_CONFIG || { endpoint: 'http://127.0.0.1:11434/api/generate', model: 'qwen3:4b' };
+const resumeAiConfig = window.RESUME_AI_CONFIG || { endpoint: 'http://127.0.0.1:11434/api/generate', model: 'qwen3:8b' };
 const experienceGenerator = document.querySelector('#experience-generator');
 const experienceReview = document.querySelector('#experience-review');
 const originalHighlights = document.querySelector('#original-highlights');
 const originalDescription = document.querySelector('#original-description');
+const removedHighlightsReview = document.querySelector('#removed-highlights-review');
+const removedHighlights = document.querySelector('#removed-highlights');
 const generatedDescription = document.querySelector('#generated-description');
+const changeReason = document.querySelector('#change-reason');
 const generatedBullets = document.querySelector('#generated-bullets');
 const keepGeneratedDescription = document.querySelector('#keep-generated-description');
 const keepGeneratedBullets = document.querySelector('#keep-generated-bullets');
@@ -130,7 +133,6 @@ const resumeDraftExperiences = () => experiences
     lessons_learned: (experience.lessons_learned || []).slice(0, 10),
     source_repo: experience.source_repo
   }));
-
 const renderResumeDraftRoles = () => {
   resumeDraftRoles.replaceChildren();
   generatedExperienceBullets.forEach(({ id, company, role, bullets }) => {
@@ -291,7 +293,7 @@ const getDescriptionFactsFromForm = () => {
     start_date: formData.get('start_date'),
     end_date: formData.get('end_date') || 'Present',
     description: formData.get('description').trim(),
-    highlights: getResumeBullets(formData.get('highlights')).slice(0, 10),
+    highlights: getResumeBullets(formData.get('highlights')),
     technologies: formData.get('technologies').split(',').map((item) => item.trim()).filter(Boolean).slice(0, 10),
     lessons_learned: getResumeBullets(formData.get('lessons_learned')).slice(0, 10)
   };
@@ -305,7 +307,7 @@ const generateExperienceDraft = async () => {
   }
   experienceReview.hidden = true;
   originalExperienceDescription = facts.description;
-  originalResumeBullets = facts.highlights.slice(0, 5);
+  originalResumeBullets = facts.highlights;
   showExperienceMessage('Connecting to your local Ollama model...');
   try {
     const response = await fetch(resumeAiConfig.endpoint, {
@@ -316,19 +318,63 @@ const generateExperienceDraft = async () => {
         stream: false,
         format: 'json',
         think: false,
+        system: 'Rewrite highlights one-to-one. You may remove a highlight only when it is genuinely duplicated. Return one overall explanation of the changes. Preserve retained order. Never merge or invent bullets.',
+        /*
         prompt: `Create a resume-ready version of this work experience. Write one accurate description in 2-4 sentences and summarize the supplied highlights into 1-5 concise resume bullets. Use only the supplied facts. Do not invent metrics, scale, users, results, responsibilities, technologies, or outcomes. Keep the employer and role clear, use past tense unless the end date is Present, and do not mention that you are an AI. Return JSON only in this exact shape: {"description":"...","bullets":["bullet 1"]}. Work experience facts: ${JSON.stringify(facts)}`
+        */
+        prompt: `Create a resume-ready version of this work experience. Write one accurate description in 2-4 sentences. For each retained highlight, return exactly one rewritten bullet with its zero-based highlight_index. You may remove duplicate highlights only; return removed highlight indexes without individual reasons. Every highlight must appear exactly once in bullets or removed. Return one overall explanation of the changes in change_reason. Return JSON only as {"description":"...","bullets":[{"highlight_index":0,"bullet":"..."}],"removed":[1],"change_reason":"..."}. Work experience facts: ${JSON.stringify(facts)}`
       })
     });
     if (!response.ok) throw new Error(`Ollama returned ${response.status}`);
     const result = await response.json();
     const generated = JSON.parse(result.response || result.thinking || '{}');
     generatedExperienceDescription = typeof generated.description === 'string' ? generated.description.trim() : '';
-    generatedResumeBullets = (generated.bullets || []).filter((bullet) => typeof bullet === 'string' && bullet.trim()).map((bullet) => bullet.trim()).slice(0, 5);
-    if (!generatedExperienceDescription || generatedExperienceDescription.length > 1000 || generatedResumeBullets.length < 3) throw new Error('The model returned fewer than 3 resume bullets. Add more highlights and try again.');
+    const removedIndexes = (Array.isArray(generated.removed)
+      ? generated.removed.map((item) => {
+        if (typeof item === 'object' && item !== null) return item.highlight_index ?? item.index ?? item.source_index;
+        return item;
+      }).map((index) => Number(index)).filter((index) => Number.isInteger(index))
+      : []).slice(0, 3);
+    const rawBullets = Array.isArray(generated.bullets) ? generated.bullets : generated.highlights;
+    const generatedItems = Array.isArray(rawBullets)
+      ? rawBullets.map((item, index) => {
+        const fallbackIndex = [...Array(facts.highlights.length).keys()].filter((candidate) => !removedIndexes.includes(candidate))[index];
+        if (typeof item === 'string') return { highlight_index: fallbackIndex, bullet: item };
+        return {
+          highlight_index: Number.isInteger(Number(item?.highlight_index)) ? Number(item.highlight_index) : fallbackIndex,
+          bullet: item?.bullet || item?.text || item?.highlight
+        };
+      })
+      : [];
+    const returnedIndexes = new Set(generatedItems.map((item) => item.highlight_index));
+    [...Array(facts.highlights.length).keys()]
+      .filter((index) => !removedIndexes.includes(index) && !returnedIndexes.has(index))
+      .forEach((index) => generatedItems.push({ highlight_index: index, bullet: facts.highlights[index] }));
+    generatedItems.sort((first, second) => first.highlight_index - second.highlight_index);
+    const allIndexes = [...generatedItems.map((item) => item.highlight_index), ...removedIndexes];
+    const validReview = allIndexes.length === facts.highlights.length
+      && new Set(allIndexes).size === facts.highlights.length
+      && allIndexes.every((index) => Number.isInteger(index) && index >= 0 && index < facts.highlights.length)
+      && generatedItems.every((item) => typeof item.bullet === 'string' && item.bullet.trim())
+      && removedIndexes.every((index) => Number.isInteger(index));
+    if (!validReview) throw new Error(`The model returned an invalid highlight review (${generatedItems.length} bullets, removed indexes: ${removedIndexes.join(',') || 'none'}, source highlights: ${facts.highlights.length}, covered indexes: ${allIndexes.join(',') || 'none'}).`);
+    generatedResumeBullets = generatedItems.map((item) => typeof item.bullet === 'string' ? item.bullet.trim() : '').filter(Boolean);
+    if (!generatedExperienceDescription || generatedExperienceDescription.length > 1000 || !generatedResumeBullets.length) throw new Error('The model returned no usable resume bullets.');
     originalDescription.textContent = originalExperienceDescription || 'No original description entered.';
     renderBulletList(originalHighlights, originalResumeBullets);
+    removedHighlights.replaceChildren();
+    removedIndexes.forEach((index) => {
+      const entry = document.createElement('li');
+      entry.textContent = facts.highlights[index];
+      removedHighlights.append(entry);
+    });
+    removedHighlightsReview.hidden = !removedIndexes.length;
     generatedDescription.textContent = generatedExperienceDescription;
     renderBulletList(generatedBullets, generatedResumeBullets);
+    const reason = typeof generated.change_reason === 'string' && generated.change_reason.trim()
+      ? generated.change_reason.trim()
+      : removedIndexes.length ? 'Removed only highlights identified as duplicates.' : 'All highlights were retained and formalized without removing content.';
+    changeReason.textContent = `Why these changes: ${reason}`;
     experienceReview.hidden = false;
     showExperienceMessage('Draft generated. Approve the generated description or bullets, then save the role.');
   } catch (error) {
@@ -481,7 +527,7 @@ const beginEdit = (experience, showAiReview = false) => {
   originalExperienceDescription = experience.description || '';
   originalResumeBullets = (experience.original_resume_bullets?.length
     ? experience.original_resume_bullets
-    : experience.highlights?.length ? experience.highlights : experience.resume_bullets || []).slice(0, 5);
+    : experience.highlights?.length ? experience.highlights : experience.resume_bullets || []);
   Object.entries(experience).forEach(([key, value]) => {
     if (!experienceForm.elements[key]) return;
     experienceForm.elements[key].value = Array.isArray(value)
@@ -729,7 +775,7 @@ experienceForm?.addEventListener('submit', async (event) => {
     technologies: formData.get('technologies').split(',').map((item) => item.trim()).filter(Boolean),
     source_repo: formData.get('source_repo').trim() || null,
     include_in_resume: formData.get('include_in_resume') === 'on',
-    original_resume_bullets: (originalResumeBullets.length ? originalResumeBullets : getOriginalBulletsFromForm()).slice(0, 5),
+    original_resume_bullets: originalResumeBullets.length ? originalResumeBullets : getOriginalBulletsFromForm(),
     resume_bullets: generatedResumeBullets.length
       ? generatedResumeBullets
       : editingExperience?.resume_bullets || [],

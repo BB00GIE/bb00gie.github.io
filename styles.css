@@ -131,6 +131,11 @@ h1 em, h2 em { font-style:normal; color:#ec5a4d; }
 .bullet-version ul { min-height:8rem; margin:0; padding-left:1.1rem; }
 .bullet-version li { margin:.45rem 0; }
 .bullet-version p { min-height:6rem; margin:0; }
+.removed-highlights-review { margin-top:1rem; padding-top:1rem; border-top:1px solid var(--line); }
+.removed-highlights-review h4 { margin:0 0 .5rem; color:#ec5a4d; font:500 .68rem var(--mono); text-transform:uppercase; }
+.removed-highlights-review ul { margin:0; padding-left:1.1rem; }
+.removed-highlights-review li { margin:.4rem 0; }
+.change-reason { margin-top:1rem; padding-top:1rem; border-top:1px solid var(--line); color:var(--muted); font-size:.85rem; }
 .bullet-version button { margin-top:1rem; }
 .resume-option { display:flex; align-items:center; gap:.6rem; }
 .resume-option input { width:auto; }
