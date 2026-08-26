@@ -19,7 +19,8 @@ const createElement = (tagName, className, text) => {
   return element;
 };
 
-const renderExperience = (experiences) => {
+const renderExperience = (experiences, previewExperiences = null) => {
+  const previewBullets = new Map((previewExperiences || []).map((experience) => [experience.id, experience.bullets]));
   experienceTarget.replaceChildren();
   experiences.forEach((experience) => {
     const article = createElement('article', 'resume-role');
@@ -30,7 +31,7 @@ const renderExperience = (experiences) => {
     );
     article.append(heading);
     article.append(createElement('p', 'resume-company', [experience.company, experience.location].filter(Boolean).join(' / ')));
-    const highlights = (experience.resume_bullets?.length ? experience.resume_bullets : experience.highlights || []).filter(Boolean).slice(0, 5);
+    const highlights = (previewBullets.get(experience.id) || (experience.resume_bullets?.length ? experience.resume_bullets : experience.highlights || [])).filter(Boolean).slice(0, 5);
     if (highlights.length) {
       const list = createElement('ul');
       highlights.forEach((highlight) => list.append(createElement('li', '', highlight)));
@@ -68,11 +69,11 @@ const loadExperience = async () => {
     : null;
   const { data, error } = await supabaseClient
     .from('work_experience')
-    .select('company, role, location, start_date, end_date, description, highlights, resume_bullets, source_repo, include_in_resume, sort_order')
+    .select('id, company, role, location, start_date, end_date, description, highlights, resume_bullets, source_repo, include_in_resume, sort_order')
     .order('sort_order')
     .order('start_date', { ascending: false });
   if (!error && data?.length) {
-    renderExperience(data.filter((experience) => !experience.source_repo));
+    renderExperience(data.filter((experience) => !experience.source_repo), preview?.experiences?.filter((experience) => data.some((item) => item.id === experience.id)));
     renderProjects(data.filter((experience) => experience.source_repo && experience.include_in_resume !== false), preview?.projects);
   }
 };
