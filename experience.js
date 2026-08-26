@@ -23,11 +23,21 @@ const summaryReview = document.querySelector('#summary-review');
 const summaryReviewLabel = document.querySelector('#summary-review-label');
 const summarySourceCount = document.querySelector('#summary-source-count');
 const summaryMessage = document.querySelector('#summary-message');
-const resumeAiConfig = window.RESUME_AI_CONFIG || { endpoint: 'http://127.0.0.1:11434/api/generate', model: 'gemma4:26b' };
+const resumeAiConfig = window.RESUME_AI_CONFIG || { endpoint: 'http://127.0.0.1:11434/api/generate', model: 'qwen3:4b' };
+const bulletGenerator = document.querySelector('#bullet-generator');
+const generateBullets = document.querySelector('#generate-bullets');
+const bulletReview = document.querySelector('#bullet-review');
+const originalBullets = document.querySelector('#original-bullets');
+const generatedBullets = document.querySelector('#generated-bullets');
+const keepOriginal = document.querySelector('#keep-original');
+const keepGenerated = document.querySelector('#keep-generated');
+const bulletMessage = document.querySelector('#bullet-message');
 let editingExperience = null;
 let experiences = [];
 let currentSession = null;
 let generatedProjectBullets = [];
+let generatedResumeBullets = [];
+let originalResumeBullets = [];
 const resumeExperiences = [
   {
     company: 'Google',
@@ -168,6 +178,75 @@ const saveApprovedSummary = async () => {
 
 const getResumeBullets = (value) => value.split('\n').map((item) => item.trim()).filter(Boolean);
 
+const showBulletMessage = (message) => {
+  bulletMessage.hidden = false;
+  bulletMessage.textContent = message;
+};
+
+const getOriginalBulletsFromForm = () => {
+  if (originalResumeBullets.length) return originalResumeBullets;
+  const formData = new FormData(experienceForm);
+  const enteredBullets = getResumeBullets(formData.get('resume_bullets'));
+  if (enteredBullets.length) return enteredBullets;
+  const highlights = getResumeBullets(formData.get('highlights'));
+  if (highlights.length) return highlights.slice(0, 5);
+  const description = formData.get('description').trim();
+  return description ? [description] : [];
+};
+
+const renderBulletList = (target, bullets) => {
+  target.replaceChildren();
+  bullets.forEach((bullet) => {
+    const item = document.createElement('li');
+    item.textContent = bullet;
+    target.append(item);
+  });
+};
+
+const chooseResumeBullets = (bullets, label) => {
+  experienceForm.elements.resume_bullets.value = bullets.join('\n');
+  showBulletMessage(`${label} wording selected. Save the role to keep it.`);
+};
+
+const generateResumeBulletDraft = async () => {
+  const facts = getOriginalBulletsFromForm();
+  if (!facts.length) { showBulletMessage('Add highlights, a description, or original resume bullets first.'); return; }
+  generateBullets.disabled = true;
+  originalResumeBullets = facts.slice(0, 5);
+  bulletReview.hidden = true;
+  showBulletMessage('Connecting to your local Ollama model...');
+  try {
+    const formData = new FormData(experienceForm);
+    const response = await fetch(resumeAiConfig.endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: resumeAiConfig.model,
+        stream: false,
+        format: 'json',
+        prompt: `Rewrite the supplied work experience bullets as concise, professional resume bullets. Use only the supplied facts. Do not invent metrics, scope, technologies, employers, dates, or outcomes. Start each bullet with a strong action verb. Return JSON only in this exact shape: {"bullets":["bullet 1"]}. Return between 1 and 5 bullets and preserve the meaning. Role: ${formData.get('role')}. Company: ${formData.get('company')}. Supplied bullets: ${JSON.stringify(facts)}`
+      })
+    });
+    if (!response.ok) throw new Error(`Ollama returned ${response.status}`);
+    const result = await response.json();
+    const generated = JSON.parse(result.response || '{}');
+    generatedResumeBullets = (generated.bullets || []).filter((bullet) => typeof bullet === 'string' && bullet.trim()).map((bullet) => bullet.trim()).slice(0, 5);
+    if (!generatedResumeBullets.length) throw new Error('The model returned no usable bullets.');
+    renderBulletList(originalBullets, facts.slice(0, 5));
+    renderBulletList(generatedBullets, generatedResumeBullets);
+    bulletReview.hidden = false;
+    showBulletMessage('Draft generated. Choose the wording you want, then save the role.');
+  } catch (error) {
+    console.error('Ollama bullet generation failed:', error);
+    const detail = error instanceof TypeError
+      ? 'The browser could not reach Ollama. Check that ollama serve is running and allows this site origin.'
+      : error.message;
+    showBulletMessage(`Ollama could not generate a rewrite. ${detail}`);
+  } finally {
+    generateBullets.disabled = false;
+  }
+};
+
 const validateResumeBullets = (bullets) => {
   if (bullets.length > 5) return 'Use no more than 5 resume bullets per project.';
   const invalidBullet = bullets.find((bullet) => (bullet.match(/[.!?]+(?=\s|$)/g) || []).length > 2);
@@ -181,6 +260,11 @@ const resetForm = () => {
   formHeading.textContent = 'New role';
   cancelEdit.hidden = true;
   formMessage.hidden = true;
+  bulletGenerator.hidden = false;
+  bulletReview.hidden = true;
+  bulletMessage.hidden = true;
+  generatedResumeBullets = [];
+  originalResumeBullets = [];
 };
 
 const formatDate = (value) => {
@@ -284,6 +368,9 @@ const loadExperiences = async () => {
 
 const beginEdit = (experience) => {
   editingExperience = experience;
+  originalResumeBullets = (experience.original_resume_bullets?.length
+    ? experience.original_resume_bullets
+    : experience.highlights?.length ? experience.highlights : experience.resume_bullets || []).slice(0, 5);
   Object.entries(experience).forEach(([key, value]) => {
     if (!experienceForm.elements[key]) return;
     experienceForm.elements[key].value = Array.isArray(value)
@@ -291,6 +378,8 @@ const beginEdit = (experience) => {
       : (key.endsWith('_date') && value ? value.slice(0, 7) : value || '');
   });
   experienceForm.elements.include_in_resume.checked = experience.include_in_resume !== false;
+  bulletGenerator.hidden = false;
+  bulletReview.hidden = true;
   formHeading.textContent = 'Edit role';
   cancelEdit.hidden = false;
   experienceForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -477,6 +566,9 @@ signOut?.addEventListener('click', async () => {
 cancelEdit?.addEventListener('click', resetForm);
 importResume?.addEventListener('click', importResumeEntries);
 synthesizeRepos?.addEventListener('click', synthesizeRepositoryEntries);
+generateBullets?.addEventListener('click', generateResumeBulletDraft);
+keepOriginal?.addEventListener('click', () => chooseResumeBullets(getOriginalBulletsFromForm().slice(0, 5), 'Original'));
+keepGenerated?.addEventListener('click', () => chooseResumeBullets(generatedResumeBullets, 'LLM-generated'));
 generateResume?.addEventListener('click', () => {
   if (experienceForm.hidden) {
     window.open('resume.html', '_blank', 'noopener');
@@ -504,6 +596,7 @@ experienceForm?.addEventListener('submit', async (event) => {
     technologies: formData.get('technologies').split(',').map((item) => item.trim()).filter(Boolean),
     source_repo: formData.get('source_repo').trim() || null,
     include_in_resume: formData.get('include_in_resume') === 'on',
+    original_resume_bullets: (originalResumeBullets.length ? originalResumeBullets : getOriginalBulletsFromForm()).slice(0, 5),
     resume_bullets: getResumeBullets(formData.get('resume_bullets')),
     sort_order: Number.parseInt(formData.get('sort_order'), 10) || 0
   };

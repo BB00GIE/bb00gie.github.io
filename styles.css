@@ -114,6 +114,16 @@ h1 em, h2 em { font-style:normal; color:#ec5a4d; }
 .summary-generator label { display:grid; gap:.55rem; margin-top:1rem; font:500 .68rem var(--mono); text-transform:uppercase; }
 .summary-generator textarea { width:100%; border:1px solid var(--ink); border-radius:0; padding:.9rem; color:var(--ink); background:var(--paper); font:400 .95rem var(--display); }
 .summary-generator button { margin-top:.75rem; }
+.bullet-generator { margin-top:1.25rem; padding:1.25rem; border:1px solid var(--ink); background:var(--surface); }
+.bullet-generator-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; }
+.bullet-generator-heading .eyebrow { margin-bottom:.55rem; }
+.bullet-review { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:1rem; margin-top:1.25rem; }
+.bullet-version { padding:1rem; border:1px solid var(--line); }
+.bullet-version-generated { border-color:var(--yellow); }
+.bullet-version h3 { margin:0 0 .8rem; font-size:1.1rem; }
+.bullet-version ul { min-height:8rem; margin:0; padding-left:1.1rem; }
+.bullet-version li { margin:.45rem 0; }
+.bullet-version button { margin-top:1rem; }
 .resume-option { display:flex; align-items:center; gap:.6rem; }
 .resume-option input { width:auto; }
 .experience-resume-note { color:#ec5a4d; font:400 .68rem var(--mono) !important; text-transform:uppercase; }
@@ -160,6 +170,9 @@ h1 em, h2 em { font-style:normal; color:#ec5a4d; }
 	.experience-form-grid { display:block; }
 	.experience-entry-heading { display:block; }
 	.experience-dates { margin-top:.75rem; white-space:normal; }
+	.bullet-generator-heading, .bullet-review { display:block; }
+	.bullet-generator-heading button { margin-top:1rem; }
+	.bullet-version + .bullet-version { margin-top:1rem; }
 }
 
 /* Dark mode surfaces and contrast adjustments */

@@ -34,6 +34,7 @@ create table if not exists public.work_experience (
   technologies text[] not null default '{}',
   source_repo text,
   include_in_resume boolean not null default true,
+  original_resume_bullets text[] not null default '{}',
   resume_bullets text[] not null default '{}',
   sort_order integer not null default 0,
   created_at timestamptz not null default now(),
@@ -46,6 +47,7 @@ alter table public.project_updates add column if not exists image_url text;
 alter table public.work_experience add column if not exists lessons_learned text[] not null default '{}';
 alter table public.work_experience add column if not exists source_repo text;
 alter table public.work_experience add column if not exists include_in_resume boolean not null default true;
+alter table public.work_experience add column if not exists original_resume_bullets text[] not null default '{}';
 alter table public.work_experience add column if not exists resume_bullets text[] not null default '{}';
 
 do $$

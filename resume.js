@@ -30,7 +30,7 @@ const renderExperience = (experiences) => {
     );
     article.append(heading);
     article.append(createElement('p', 'resume-company', [experience.company, experience.location].filter(Boolean).join(' / ')));
-    const highlights = (experience.highlights || []).filter(Boolean).slice(0, 5);
+    const highlights = (experience.resume_bullets?.length ? experience.resume_bullets : experience.highlights || []).filter(Boolean).slice(0, 5);
     if (highlights.length) {
       const list = createElement('ul');
       highlights.forEach((highlight) => list.append(createElement('li', '', highlight)));

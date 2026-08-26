@@ -54,7 +54,29 @@
         <label>Description<textarea name="description" rows="4"></textarea></label>
         <label>Highlights <span class="form-hint">One item per line</span><textarea name="highlights" rows="5"></textarea></label>
         <label class="resume-option"><input name="include_in_resume" type="checkbox" checked> Include in generated resume</label>
-        <label>Resume bullets <span class="form-hint">Up to 5 bullets; each must be 1-2 sentences</span><textarea name="resume_bullets" rows="5" maxlength="1400" placeholder="One bullet per line"></textarea></label>
+        <label>Resume bullets <span class="form-hint">Your original wording; up to 5 bullets, one per line</span><textarea name="resume_bullets" rows="5" maxlength="1400" placeholder="One bullet per line"></textarea></label>
+        <section id="bullet-generator" class="bullet-generator" hidden>
+          <div class="bullet-generator-heading">
+            <div>
+              <p class="eyebrow">Resume-ready rewrite</p>
+              <p class="form-hint">Review the original wording beside the local LLM draft, then choose one to save.</p>
+            </div>
+            <button id="generate-bullets" class="button-secondary" type="button">Generate rewrite <span aria-hidden="true">*</span></button>
+          </div>
+          <div id="bullet-review" class="bullet-review" hidden>
+            <article class="bullet-version">
+              <h3>Original text</h3>
+              <ul id="original-bullets"></ul>
+              <button id="keep-original" class="button-secondary" type="button">Keep original</button>
+            </article>
+            <article class="bullet-version bullet-version-generated">
+              <h3>LLM-generated</h3>
+              <ul id="generated-bullets"></ul>
+              <button id="keep-generated" type="button">Keep generated</button>
+            </article>
+          </div>
+          <p id="bullet-message" class="publish-feedback" role="status" hidden></p>
+        </section>
         <label>Things learned <span class="form-hint">One item per line</span><textarea name="lessons_learned" rows="4"></textarea></label>
         <label>Technologies <span class="form-hint">Comma-separated</span><input name="technologies" type="text"></label>
         <label>Source repository<input name="source_repo" type="url" placeholder="https://github.com/..."></label>
