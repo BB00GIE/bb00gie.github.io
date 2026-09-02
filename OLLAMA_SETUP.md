@@ -17,6 +17,22 @@ ollama pull gemma4:26b
 4. Open `experience.html`, sign in as the allowlisted GitHub account, and use **Re-word with AI** beside a saved role or **Generate resume** for the full resume.
 5. Run the `resume_profile` additions in `supabase.sql` before saving an approved summary.
 
+For a larger resume context on macOS, stop any existing Ollama server and start it with a larger context limit:
+
+```bash
+export OLLAMA_CONTEXT_LENGTH=16384
+export OLLAMA_ORIGINS='http://localhost:5500,http://127.0.0.1:5500'
+ollama serve
+```
+
+The browser pipeline requests 8,192 tokens by default. You can request 16,384 or 32,768 from the page by defining `contextLength` in `window.RESUME_AI_CONFIG` before `experience.js` loads. Larger values require more memory and are slower on CPU:
+
+```html
+<script>
+  window.RESUME_AI_CONFIG = { contextLength: 16384 };
+</script>
+```
+
 When using the deployed site at `https://bb00gie.github.io`, Ollama must allow that browser origin. In PowerShell, configure the origin once and then fully restart Ollama:
 
 ```powershell

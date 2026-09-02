@@ -19,6 +19,7 @@ const generateResume = document.querySelector('#generate-resume');
 const summaryGenerator = document.querySelector('#summary-generator');
 const generateSummary = document.querySelector('#generate-summary');
 const saveSummary = document.querySelector('#save-summary');
+const publishResume = document.querySelector('#publish-resume');
 const summaryReview = document.querySelector('#summary-review');
 const summaryReviewLabel = document.querySelector('#summary-review-label');
 const summarySourceCount = document.querySelector('#summary-source-count');
@@ -27,10 +28,12 @@ const resumeDraftReview = document.querySelector('#resume-draft-review');
 const resumeDraftRoles = document.querySelector('#resume-draft-roles');
 const resumeAiConfig = {
   endpoint: 'http://127.0.0.1:11434/api/generate',
-  model: 'qwen2.5vl:3b',
+  model: 'qwen2.5:7b-instruct',
   cleanerModel: 'qwen2.5vl:3b',
-  builderModel: 'qwen2.5vl:3b',
-  reviewerModel: 'qwen2.5vl:3b',
+  builderModel: 'qwen2.5:7b-instruct',
+  reviewerModel: 'qwen2.5:7b-instruct',
+  contextLength: 8192,
+  builderOutputTokens: 4096,
   ...window.RESUME_AI_CONFIG
 };
 const experienceGenerator = document.querySelector('#experience-generator');
@@ -107,20 +110,104 @@ const showMessage = (message) => {
 
 const parseOllamaJson = (text) => {
   if (!text || !text.trim()) throw new Error('The model returned an empty response.');
-  const trimmed = text.trim();
-  try {
-    return JSON.parse(trimmed);
-  } catch (error) {
-    const firstBrace = trimmed.indexOf('{');
-    const lastBrace = trimmed.lastIndexOf('}');
-    if (firstBrace >= 0 && lastBrace > firstBrace) {
-      return JSON.parse(trimmed.slice(firstBrace, lastBrace + 1));
+
+  const stripCodeFence = (value) => value
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
+
+  const recoverTruncatedObject = (value) => {
+    const truncated = value.trim();
+    if (!truncated.startsWith('{')) return null;
+
+    const summaryMatch = truncated.match(/"summary"\s*:\s*"((?:\\.|[^"\\])*)/);
+    if (summaryMatch) {
+      return { summary: summaryMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\') };
     }
-    throw new Error(`The model returned invalid JSON: ${trimmed.slice(0, 200)}`);
+
+    const keyMatch = truncated.match(/"([A-Za-z0-9_-]+)"\s*:\s*"((?:\\.|[^"\\])*)/);
+    if (keyMatch) {
+      return { [keyMatch[1]]: keyMatch[2].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\') };
+    }
+
+    return null;
+  };
+
+  const uniqueCandidates = new Set();
+  const trimmed = stripCodeFence(String(text).trim());
+
+  const addCandidate = (candidate) => {
+    if (!candidate || !candidate.trim()) return;
+    const normalized = candidate.trim();
+    if (!uniqueCandidates.has(normalized)) uniqueCandidates.add(normalized);
+  };
+
+  addCandidate(trimmed);
+
+  const firstJsonIndex = trimmed.search(/[\[{]/);
+  if (firstJsonIndex >= 0) {
+    const fromFirstBracket = trimmed.slice(firstJsonIndex);
+    addCandidate(fromFirstBracket);
+    addCandidate(fromFirstBracket.replace(/,\s*([}\]])/g, '$1'));
+
+    const partial = recoverTruncatedObject(fromFirstBracket);
+    if (partial) addCandidate(JSON.stringify(partial));
+
+    let balance = '';
+    let stack = [];
+    let inString = false;
+    let escaped = false;
+    for (let index = 0; index < fromFirstBracket.length; index += 1) {
+      const char = fromFirstBracket[index];
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (char === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (char === '"') {
+        inString = !inString;
+        continue;
+      }
+      if (inString) continue;
+      if (char === '{' || char === '[') {
+        stack.push(char);
+        balance += char;
+      } else if (char === '}' || char === ']') {
+        const expected = char === '}' ? '{' : '[';
+        if (stack.length && stack[stack.length - 1] === expected) {
+          stack.pop();
+          balance += char;
+        } else {
+          break;
+        }
+      }
+    }
+    if (balance) {
+      addCandidate(fromFirstBracket.slice(0, balance.length ? fromFirstBracket.length : firstJsonIndex + 1));
+    }
+
+    const fallback = fromFirstBracket.slice(0, Math.max(1, fromFirstBracket.lastIndexOf('}') + 1));
+    if (fallback && fallback !== fromFirstBracket) addCandidate(fallback);
   }
+
+  for (const candidate of uniqueCandidates) {
+    try {
+      return JSON.parse(candidate);
+    } catch (error) {
+      // Keep trying the cleaned variants below.
+    }
+  }
+
+  const recovered = recoverTruncatedObject(trimmed);
+  if (recovered) return recovered;
+
+  throw new Error(`The model returned invalid JSON: ${trimmed.slice(0, 200)}`);
 };
 
-const runOllamaPrompt = async ({ model, system, prompt }) => {
+const runOllamaPrompt = async ({ model, system, prompt, outputTokens = 2048 }) => {
   const response = await fetch(resumeAiConfig.endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -129,13 +216,14 @@ const runOllamaPrompt = async ({ model, system, prompt }) => {
       stream: false,
       format: 'json',
       think: false,
+      options: { temperature: 0.2, num_ctx: resumeAiConfig.contextLength, num_predict: outputTokens },
       system,
       prompt
     })
   });
   if (!response.ok) throw new Error(`Ollama returned ${response.status}`);
   const result = await response.json();
-  const rawText = result.response || result.thinking || '';
+  const rawText = result.response || result.message?.content || result.thinking || '';
   return parseOllamaJson(rawText);
 };
 
@@ -236,8 +324,8 @@ const generateFullResumeDraft = async () => {
         location: experience.location || '',
         start_date: experience.start_date || '',
         end_date: experience.end_date || 'Present',
-        description: experience.description || '',
-        highlights: (experience.highlights || []).slice(0, 10)
+        description: (experience.description || '').slice(0, 300),
+        highlights: (experience.highlights || []).slice(0, 4).map((highlight) => highlight.slice(0, 180))
       }))
     };
 
@@ -254,8 +342,9 @@ const generateFullResumeDraft = async () => {
     showSummaryMessage('Step 2/3: building the software engineer resume draft...');
     const builderResult = await runOllamaPrompt({
       model: builderModel,
+      outputTokens: resumeAiConfig.builderOutputTokens,
       system: 'You are Agent 2: a senior software engineer resume writer. Build a polished, ATS-friendly resume from cleaned experience data. Output valid JSON only.',
-      prompt: `Create a software engineer resume using the following cleaned work experience. Preserve every entry id exactly. Use the same ids in the resume expeience list. Return JSON only in this exact shape: {"summary":"...","experience":[{"id":"entry id","company":"...","title":"...","location":"...","start_date":"...","end_date":"...","bullet_points":["bullet 1"]}]}. Cleaned work experience:\n${JSON.stringify(cleanedPayload)}\n\nNormalized entries:\n${JSON.stringify(cleanedExperience)}`
+      prompt: `Create a concise software engineer resume using the normalized entries below. Preserve every entry id exactly. Return exactly 3 bullets per entry. Return JSON only in this exact shape: {"summary":"...","experience":[{"id":"entry id","company":"...","title":"...","location":"...","start_date":"...","end_date":"...","bullet_points":["bullet 1","bullet 2","bullet 3"]}]}. Normalized entries:\n${JSON.stringify(cleanedExperience)}`
     });
 
     const summary = typeof builderResult.summary === 'string' ? builderResult.summary.trim() : '';
@@ -280,7 +369,7 @@ const generateFullResumeDraft = async () => {
     const reviewResult = await runOllamaPrompt({
       model: reviewerModel,
       system: 'You are Agent 3: a senior technical recruiter for a top software company. Review the resume for clarity, technical relevance, and hiring signal. Return valid JSON only.',
-      prompt: `Review this resume as if it were a candidate applying for a software engineer role. Return JSON only in this exact shape: {"overall_score": 0,"strengths":["..."],"gaps":["..."],"ats_issues":["..."],"improvement_suggestions":["..."],"likely_screening_outcome":"..."}. Resume:\n${JSON.stringify({ summary, experience: builderExperience })}`
+      prompt: `Review this resume as a software recruiter. Keep each list to 2 items maximum. Return JSON only in this exact shape: {"overall_score":0,"strengths":["..."],"gaps":["..."],"ats_issues":["..."],"improvement_suggestions":["..."],"likely_screening_outcome":"..."}. Resume:\n${JSON.stringify({ summary, experience: builderExperience.map((entry) => ({ ...entry, bullet_points: (entry.bullet_points || []).slice(0, 3).map((bullet) => bullet.slice(0, 240)) })) })}`
     });
 
     console.info('Recruiter review:', reviewResult);
@@ -293,6 +382,7 @@ const generateFullResumeDraft = async () => {
     resumeDraftReview.hidden = false;
     renderResumeDraftRoles();
     saveSummary.hidden = false;
+    publishResume.hidden = false;
     const reviewSummary = Number.isFinite(Number(reviewResult.overall_score))
       ? ` Resume score: ${reviewResult.overall_score}/100.`
       : '';
@@ -333,7 +423,7 @@ const generateSummaryDraft = async (openPreview = false) => {
     });
     if (!response.ok) throw new Error(`Ollama returned ${response.status}`);
     const result = await response.json();
-    const generated = JSON.parse(result.response || '{}');
+    const generated = parseOllamaJson(result.response || result.message?.content || result.thinking || '{}');
     const draft = generated.summary ? generated.summary.trim() : '';
     generatedProjectBullets = projects.map((project) => {
       const generatedProject = generated.projects && generated.projects.find((item) => item.id === project.id);
@@ -345,6 +435,7 @@ const generateSummaryDraft = async (openPreview = false) => {
     summaryReview.value = draft;
     summaryReviewLabel.hidden = false;
     saveSummary.hidden = false;
+    publishResume.hidden = false;
     showSummaryMessage('Draft generated. Review every claim before saving.');
     if (openPreview) {
       localStorage.setItem('resumePreview', JSON.stringify({ summary: draft, projects: generatedProjectBullets }));
@@ -362,9 +453,11 @@ const generateSummaryDraft = async (openPreview = false) => {
   }
 };
 
-const saveApprovedSummary = async () => {
+const saveApprovedSummary = async (publish = false) => {
   const summary = summaryReview.value.trim();
   if (!summary || summary.length > 700) { showSummaryMessage('Enter a summary between 1 and 700 characters.'); return; }
+  const activeButton = publish ? publishResume : saveSummary;
+  activeButton.disabled = true;
   saveSummary.disabled = true;
   const { error } = await supabaseClient.from('resume_profile').upsert({ id: 1, summary, updated_by: currentSession.user.id, updated_at: new Date().toISOString() });
   if (error) {
@@ -375,9 +468,10 @@ const saveApprovedSummary = async () => {
       supabaseClient.from('work_experience').update({ resume_bullets: bullets }).eq('id', id)
     ));
     const results = await Promise.all(projectUpdates);
-    if (results.some((result) => result.error)) showSummaryMessage('Summary saved, but some project bullets could not be updated.');
-    else showSummaryMessage('Approved summary and experience bullets saved to your resume.');
+    if (results.some((result) => result.error)) showSummaryMessage('Resume summary saved, but some experience bullets could not be updated.');
+    else showSummaryMessage(publish ? 'Generated resume published to the live resume page.' : 'Approved summary and experience bullets saved to your resume.');
   }
+  activeButton.disabled = false;
   saveSummary.disabled = false;
 };
 
@@ -453,7 +547,7 @@ const generateExperienceDraft = async () => {
     });
     if (!response.ok) throw new Error(`Ollama returned ${response.status}`);
     const result = await response.json();
-    const generated = JSON.parse(result.response || result.thinking || '{}');
+    const generated = parseOllamaJson(result.response || result.message?.content || result.thinking || '{}');
     generatedExperienceDescription = typeof generated.description === 'string' ? generated.description.trim() : cleanedDescription;
     const removedIndexes = (Array.isArray(generated.removed)
       ? generated.removed.map((item) => {
@@ -897,6 +991,7 @@ if (generateResume) { generateResume.addEventListener('click', () => {
 }); }
 if (generateSummary) { generateSummary.addEventListener('click', generateSummaryDraft); }
 if (saveSummary) { saveSummary.addEventListener('click', saveApprovedSummary); }
+if (publishResume) { publishResume.addEventListener('click', () => saveApprovedSummary(true)); }
 
 if (experienceForm) { experienceForm.addEventListener('submit', async (event) => {
   event.preventDefault();
