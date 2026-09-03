@@ -61,6 +61,30 @@ The default model and endpoint are defined in `experience.js` through `RESUME_AI
 
 The browser must be allowed to reach Ollama from the page origin. Some regular browsers block a hosted HTTPS page from reaching a local HTTP service even when Ollama CORS is configured. The VS Code built-in browser allows this local workflow; alternatively, run the site through a local web server and open `http://localhost:5500/experience.html` directly. The public GitHub Pages URL remains a read-only viewer for browsers that block local connections.
 
+## Agent 1: GitHub project formatter
+
+When **Synthesize GitHub projects** runs, the browser first collects repository metadata, related repositories, project journal entries, pull requests, commits, technologies, and repository dates. Each grouped project is then sent to Agent 1 before it is saved to `work_experience`.
+
+Agent 1 formats the collected facts into a concise Selected Project entry with this JSON shape:
+
+```json
+{
+  "project_id": "https://github.com/BB00GIE/android-dev",
+  "project_name": "android dev",
+  "role": "Android Developer",
+  "company": "Independent project",
+  "location": "",
+  "start_date": "2024-01-01",
+  "end_date": null,
+  "description": "Built Android applications while learning Kotlin and modern Android development practices.",
+  "bullet_points": ["Built Android applications in Kotlin through iterative project development."]
+}
+```
+
+The formatter may merge duplicate journal, commit, or repository facts, but it must not invent employers, users, metrics, technologies, outcomes, or unsupported dates. Bullets are limited to five, one sentence each, and no more than 20 words. Project rows retain their raw `highlights` and `lessons_learned` for editing and provenance. The original repository name is preserved alongside the formatted role, and the row remains identified by `source_repo`.
+
+If Ollama is unavailable or returns an invalid response, synchronization falls back to the deterministic project entry built from the available GitHub and journal facts. Existing repository links and project updates are preserved.
+
 ## Optional higher-quality setup for later
 
 For the strongest local workflow later, use the more capable model stack below instead of the lighter setup:
