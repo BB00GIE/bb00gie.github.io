@@ -517,70 +517,27 @@ const generateExperienceDraft = async () => {
   experienceReview.hidden = true;
   originalExperienceDescription = facts.description;
   originalResumeBullets = facts.highlights;
-  showExperienceMessage('Running the resume cleanup agent before the draft rewrite...');
+  showExperienceMessage('Running Agent 1 to format this experience into resume-ready content...');
   try {
     const cleanerModel = resumeAiConfig.cleanerModel || resumeAiConfig.model;
     const cleanerResult = await runOllamaPrompt({
       model: cleanerModel,
-      system: 'You are Agent 1: a resume cleanup specialist. Normalize work experience into resume-ready bullet points. Preserve the original meaning and output valid JSON only.',
-      prompt: `Clean this one work experience entry into resume-ready bullets and a polished description. Return JSON only in this exact shape: {"description":"...","bullet_points":["bullet 1"]}. Work experience facts:\n${JSON.stringify(facts)}`
+      system: 'You are Agent 1: a resume cleanup specialist. Rewrite every supplied highlight into one concise, resume-ready bullet. Never delete, merge, or invent highlights. Keep each bullet to one sentence and no more than  twenty words. Preserve the original meaning and output valid JSON only.',
+      prompt: `Rewrite this work experience into a polished description and concise resume bullets. Return exactly one bullet for every input highlight, in the same order. The output bullet count must equal the input highlight count. Do not omit or combine any highlights. Keep each bullet to one sentence and no more than 20 words. Return JSON only in this exact shape: {"description":"...","bullet_points":["rewritten bullet 1"]}. Work experience facts:\n${JSON.stringify(facts)}`
     });
-
-    showExperienceMessage('Step 2/2: rewriting the role description and bullets for resume polish...');
 
     const cleanedDescription = typeof cleanerResult.description === 'string' ? cleanerResult.description.trim() : facts.description;
     const cleanedBullets = Array.isArray(cleanerResult.bullet_points)
       ? cleanerResult.bullet_points.filter((bullet) => typeof bullet === 'string' && bullet.trim()).map((bullet) => bullet.trim())
-      : facts.highlights;
-
-    const response = await fetch(resumeAiConfig.endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: resumeAiConfig.model,
-        stream: false,
-        format: 'json',
-        think: false,
-        system: 'Rewrite highlights one-to-one. You may remove a highlight only when it is genuinely duplicated. Return one overall explanation of the changes. Preserve retained order. Never merge or invent bullets.',
-        prompt: `Create a resume-ready version of this work experience. Write one accurate description in 2-4 sentences. For each retained highlight, return exactly one rewritten bullet with its zero-based highlight_index. You may remove duplicate highlights only; return removed highlight indexes without individual reasons. Every highlight must appear exactly once in bullets or removed. Return one overall explanation of the changes in change_reason. Return JSON only as {"description":"...","bullets":[{"highlight_index":0,"bullet":"..."}],"removed":[1],"change_reason":"..."}. Work experience facts: ${JSON.stringify({ ...facts, description: cleanedDescription, highlights: cleanedBullets })}`
-      })
-    });
-    if (!response.ok) throw new Error(`Ollama returned ${response.status}`);
-    const result = await response.json();
-    const generated = parseOllamaJson(result.response || result.message?.content || result.thinking || '{}');
-    generatedExperienceDescription = typeof generated.description === 'string' ? generated.description.trim() : cleanedDescription;
-    const removedIndexes = (Array.isArray(generated.removed)
-      ? generated.removed.map((item) => {
-        if (typeof item === 'object' && item !== null) {
-          return item.highlight_index !== undefined ? item.highlight_index : (item.index !== undefined ? item.index : item.source_index);
-        }
-        return item;
-      }).map((index) => Number(index)).filter((index) => Number.isInteger(index))
-      : []).slice(0, 3);
-    const rawBullets = Array.isArray(generated.bullets) ? generated.bullets : generated.highlights;
-    const generatedItems = Array.isArray(rawBullets)
-      ? rawBullets.map((item, index) => {
-        const fallbackIndex = [...Array(cleanedBullets.length).keys()].filter((candidate) => !removedIndexes.includes(candidate))[index];
-        if (typeof item === 'string') return { highlight_index: fallbackIndex, bullet: item };
-        return {
-          highlight_index: Number.isInteger(Number(item && item.highlight_index)) ? Number(item.highlight_index) : fallbackIndex,
-          bullet: (item && (item.bullet || item.text || item.highlight)) || ''
-        };
-      })
       : [];
-    const returnedIndexes = new Set(generatedItems.map((item) => item.highlight_index));
-    [...Array(cleanedBullets.length).keys()]
-      .filter((index) => !removedIndexes.includes(index) && !returnedIndexes.has(index))
-      .forEach((index) => generatedItems.push({ highlight_index: index, bullet: cleanedBullets[index] }));
-    generatedItems.sort((first, second) => first.highlight_index - second.highlight_index);
-    const allIndexes = [...generatedItems.map((item) => item.highlight_index), ...removedIndexes];
-    const validReview = allIndexes.length === cleanedBullets.length
-      && new Set(allIndexes).size === cleanedBullets.length
-      && allIndexes.every((index) => Number.isInteger(index) && index >= 0 && index < cleanedBullets.length)
-      && generatedItems.every((item) => typeof item.bullet === 'string' && item.bullet.trim())
-      && removedIndexes.every((index) => Number.isInteger(index));
-    if (!validReview) throw new Error(`The model returned an invalid highlight review (${generatedItems.length} bullets, removed indexes: ${removedIndexes.join(',') || 'none'}, source highlights: ${cleanedBullets.length}, covered indexes: ${allIndexes.join(',') || 'none'}).`);
-    generatedResumeBullets = generatedItems.map((item) => typeof item.bullet === 'string' ? item.bullet.trim() : '').filter(Boolean);
+    if (cleanedBullets.length !== facts.highlights.length) {
+      throw new Error(`Agent 1 returned ${cleanedBullets.length} bullets for ${facts.highlights.length} highlights. No highlights were removed; try again.`);
+    }
+    const longBullet = cleanedBullets.find((bullet) => bullet.split(/\s+/).filter(Boolean).length > 20);
+    if (longBullet) throw new Error('Agent 1 returned a bullet longer than 20 words. Try again.');
+    generatedExperienceDescription = cleanedDescription;
+    generatedResumeBullets = cleanedBullets;
+    const removedIndexes = [];
     if (!generatedExperienceDescription || generatedExperienceDescription.length > 1000 || !generatedResumeBullets.length) throw new Error('The model returned no usable resume bullets.');
     originalDescription.textContent = originalExperienceDescription || 'No original description entered.';
     renderBulletList(originalHighlights, originalResumeBullets);
@@ -593,9 +550,7 @@ const generateExperienceDraft = async () => {
     removedHighlightsReview.hidden = !removedIndexes.length;
     generatedDescription.textContent = generatedExperienceDescription;
     renderBulletList(generatedBullets, generatedResumeBullets);
-    const reason = typeof generated.change_reason === 'string' && generated.change_reason.trim()
-      ? generated.change_reason.trim()
-      : removedIndexes.length ? 'Removed only highlights identified as duplicates.' : 'All highlights were retained and formalized without removing content.';
+    const reason = 'Agent 1 cleaned and formatted the supplied experience into resume-ready content.';
     changeReason.textContent = `Why these changes: ${reason}`;
     experienceReview.hidden = false;
     showExperienceMessage('Draft generated. Approve the generated description or bullets, then save the role.');
@@ -668,9 +623,12 @@ const renderExperiences = () => {
       description.textContent = experience.description;
       article.append(description);
     }
-    if (experience.highlights && experience.highlights.length) {
+    const displayHighlights = experience.source_repo && experience.resume_bullets && experience.resume_bullets.length
+      ? experience.resume_bullets
+      : experience.highlights;
+    if (displayHighlights && displayHighlights.length) {
       const list = document.createElement('ul');
-      experience.highlights.forEach((highlight) => {
+      displayHighlights.forEach((highlight) => {
         const item = document.createElement('li');
         item.textContent = highlight;
         list.append(item);
@@ -880,6 +838,58 @@ const synthesizeProject = (repo, groupedRepos, updates, activity) => {
   };
 };
 
+const formatProjectWithAgent = async (project) => {
+  const projectFacts = {
+    project_id: project.source_repo,
+    repository: project.role,
+    related_repositories: project.highlights.filter((highlight) => highlight.startsWith('Related repositories:')).slice(0, 1),
+    description: project.description.slice(0, 500),
+    activity: project.highlights.filter((highlight) => !highlight.startsWith('Related repositories:')).map((highlight) => highlight.slice(0, 300)).slice(0, 10),
+    lessons_learned: project.lessons_learned.map((lesson) => lesson.slice(0, 300)).slice(0, 4),
+    technologies: project.technologies,
+    start_date: project.start_date,
+    end_date: project.end_date
+  };
+  try {
+    const formatterRequest = runOllamaPrompt({
+      model: resumeAiConfig.cleanerModel || resumeAiConfig.model,
+      outputTokens: 2048,
+      system: 'You are Agent 1: a resume project formatter. Turn verified software project facts into a concise, ATS-friendly Selected Project entry. You may merge duplicate or overlapping facts, but never invent employers, users, metrics, technologies, outcomes, or dates. Keep the entry clearly project-based, not employment. Output valid JSON only.',
+      prompt: `Format this software project for a resume. Preserve project_id and the repository name exactly. Return JSON only in this exact shape: {"project_id":"...","project_name":"repository name","role":"...","company":"Independent project","location":"...","start_date":"YYYY-MM-DD","end_date":"YYYY-MM-DD or null","description":"one or two concise sentences","bullet_points":["concise bullet"]}. Use only the supplied facts. Merge duplicates when useful. Return 2-5 concise bullets, each one sentence and no more than 20 words. Keep supported repository dates; use null only for an unknown end date. Project facts:\n${JSON.stringify(projectFacts)}`
+    });
+    const result = await Promise.race([
+      formatterRequest,
+      new Promise((resolve, reject) => setTimeout(() => reject(new Error('Agent 1 project formatting timed out.')), 45000))
+    ]);
+    const bullets = Array.isArray(result.bullet_points)
+      ? result.bullet_points.filter((bullet) => typeof bullet === 'string' && bullet.trim()).map((bullet) => bullet.trim()).slice(0, 5)
+      : [];
+    const startDate = typeof result.start_date === 'string' && /^\d{4}-\d{2}(-\d{2})?$/.test(result.start_date)
+      ? (result.start_date.length === 7 ? `${result.start_date}-01` : result.start_date)
+      : project.start_date;
+    const endDate = typeof result.end_date === 'string' && /^\d{4}-\d{2}(-\d{2})?$/.test(result.end_date)
+      ? (result.end_date.length === 7 ? `${result.end_date}-01` : result.end_date)
+      : null;
+    const context = typeof result.company === 'string' && result.company.trim() ? result.company.trim() : project.company;
+    const projectName = project.role;
+    if (context.length > 160 || !/(project|github|independent|personal|open source)/i.test(context)) throw new Error('Agent 1 returned an invalid project context.');
+    if (result.project_id !== project.source_repo || !bullets.length || !result.role || !result.description) throw new Error('Agent 1 returned an incomplete project entry.');
+    return {
+      ...project,
+      role: projectName,
+      company: `${context} / ${projectName}`.slice(0, 160),
+      location: project.location,
+      start_date: startDate,
+      end_date: endDate,
+      description: String(result.description).trim().slice(0, 1000),
+      resume_bullets: bullets
+    };
+  } catch (error) {
+    console.warn('Agent 1 project formatting unavailable; using source facts.', error);
+    return project;
+  }
+};
+
 const removeUnavailableRepositoryEntries = async (repos) => {
   const publicRepositoryPrefixes = new Set(repos.map((repo) => getRepositoryPrefix(repo.full_name)));
   const unavailableEntries = experiences.filter((experience) => {
@@ -909,13 +919,14 @@ const synthesizeRepositoryEntries = async () => {
     }));
     const repositoryGroups = [...new Map(repos.map((repo) => [getRepositoryPrefix(repo.full_name), []])).entries()];
     repos.forEach((repo) => repositoryGroups.find(([prefix]) => prefix === getRepositoryPrefix(repo.full_name))[1].push(repo));
-    const entries = repositoryGroups.map(([prefix, groupedRepos]) => {
+    const entries = await Promise.all(repositoryGroups.map(async ([prefix, groupedRepos]) => {
       const groupActivities = groupedRepos.map((repo) => activity[repos.indexOf(repo)]);
-      return synthesizeProject(groupedRepos[0], groupedRepos, updates, {
+      const project = synthesizeProject(groupedRepos[0], groupedRepos, updates, {
         commits: groupActivities.flatMap((item) => item.commits),
         pullRequests: groupActivities.flatMap((item) => item.pullRequests)
       });
-    });
+      return formatProjectWithAgent(project);
+    }));
     const result = await syncExperienceEntries(entries, (experience, entry) => {
       const repoA = experience.source_repo ? experience.source_repo.replace('https://github.com/', '') : '';
       const repoB = entry.source_repo ? entry.source_repo.replace('https://github.com/', '') : '';
