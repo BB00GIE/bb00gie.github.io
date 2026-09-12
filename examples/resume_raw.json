@@ -1,0 +1,18 @@
+[
+  {
+    "company": "Acme Software",
+    "title": "Software Engineer",
+    "location": "Remote",
+    "start_date": "2022-01",
+    "end_date": "2024-12",
+    "description": "Built internal tools for customer onboarding, improved API reliability, and led performance tuning projects."
+  },
+  {
+    "company": "Northwind Labs",
+    "title": "Junior Software Engineer",
+    "location": "Seattle, WA",
+    "start_date": "2020-06",
+    "end_date": "2021-12",
+    "description": "Developed web dashboards, maintained backend services, and collaborated with designers and product teams on feature delivery."
+  }
+]

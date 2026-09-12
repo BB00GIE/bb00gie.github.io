@@ -28,7 +28,7 @@
       <p id="access-message" class="access-message" hidden></p>
     </section>
     <section id="experience-content" class="experience-content section-wrap">
-      <div class="section-heading"><p class="eyebrow">Career record</p><div class="experience-heading-actions"><p id="experience-count" class="section-note">0 entries</p><button id="generate-resume" class="button-secondary" type="button">Generate resume <span aria-hidden="true">↗</span></button></div></div>
+      <div class="section-heading"><p class="eyebrow">Career record</p><div class="experience-heading-actions"><p id="experience-count" class="section-note">0 entries</p><a class="button-secondary" href="resume.html" target="_blank" rel="noopener">Show resume <span aria-hidden="true">↗</span></a></div></div>
       <form id="experience-form" class="experience-form" hidden>
         <p id="form-heading" class="eyebrow">New role</p>
         <button id="import-resume" class="button-secondary" type="button">Import resume entries <span aria-hidden="true">↓</span></button>
@@ -39,7 +39,9 @@
           <p id="summary-source-count" class="summary-source-count"></p>
           <div class="update-form-actions">
             <button id="generate-summary" type="button">Generate summary <span aria-hidden="true">*</span></button>
+            <button id="generate-resume" type="button">Generate resume <span aria-hidden="true">↗</span></button>
             <button id="save-summary" class="button-secondary" type="button" hidden>Save approved summary <span aria-hidden="true">+</span></button>
+            <button id="publish-resume" type="button" hidden>Publish generated resume <span aria-hidden="true">↗</span></button>
           </div>
           <label id="summary-review-label" hidden>Review draft<textarea id="summary-review" rows="5" maxlength="700"></textarea></label>
           <div id="resume-draft-review" class="resume-draft-review" hidden>

@@ -49,7 +49,14 @@ const renderProjects = (projects, previewProjects = null) => {
   projectTarget.replaceChildren();
   projects.forEach((project) => {
     const article = createElement('article', 'resume-project');
-    article.append(createElement('h3', '', project.role));
+    const heading = createElement('div', 'resume-role-heading');
+    heading.append(
+      createElement('h3', '', project.role),
+      createElement('span', '', `${formatDate(project.start_date)} - ${formatDate(project.end_date)}`)
+    );
+    article.append(heading);
+    article.append(createElement('p', 'resume-company', [project.company, project.location].filter(Boolean).join(' / ')));
+    if (project.description) article.append(createElement('p', '', project.description));
     const bullets = (previewBullets.get(project.id) || project.resume_bullets || []).filter(Boolean).slice(0, 5);
     if (bullets.length) {
       const list = createElement('ul');
