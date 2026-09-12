@@ -270,6 +270,8 @@ const saveApprovedSummary = async () => {
 
 const getResumeBullets = (value) => value.split('\n').map((item) => item.trim()).filter(Boolean);
 
+const getOriginalBulletsFromForm = () => getResumeBullets(new FormData(experienceForm).get('highlights') || '');
+
 const renderBulletList = (target, bullets) => {
   target.replaceChildren();
   bullets.forEach((bullet) => {
