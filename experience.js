@@ -51,6 +51,7 @@ const experienceMessage = document.querySelector('#experience-message');
 let editingExperience = null;
 let experiences = [];
 let currentSession = null;
+let isAllowedEditor = false;
 let generatedProjectBullets = [];
 let generatedExperienceBullets = [];
 let generatedResumeBullets = [];
@@ -677,20 +678,22 @@ const renderExperiences = () => {
     }
     const actions = document.createElement('div');
     actions.className = 'update-actions';
-    ['Edit', 'Delete', 'Re-word with AI'].forEach((label) => {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.textContent = label;
-      button.addEventListener('click', () => {
-        if (label === 'Edit') beginEdit(experience);
-        else if (label === 'Delete') deleteExperience(experience.id);
-        else {
-          beginEdit(experience, true);
-          generateExperienceDraft();
-        }
+    if (isAllowedEditor) {
+      ['Edit', 'Delete', 'Re-word with AI'].forEach((label) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = label;
+        button.addEventListener('click', () => {
+          if (label === 'Edit') beginEdit(experience);
+          else if (label === 'Delete') deleteExperience(experience.id);
+          else {
+            beginEdit(experience, true);
+            generateExperienceDraft();
+          }
+        });
+        actions.append(button);
       });
-      actions.append(button);
-    });
+    }
     article.append(actions);
     experienceList.append(article);
   });
@@ -946,6 +949,7 @@ const synthesizeRepositoryEntries = async () => {
 
 const updateAuthUi = async (session) => {
   currentSession = session;
+  isAllowedEditor = false;
   if (!session) {
     authStatus.textContent = supabaseClient ? 'Public experience record. Sign in to manage it.' : 'Supabase is not configured yet.';
     signIn.hidden = !supabaseClient;
@@ -970,6 +974,7 @@ const updateAuthUi = async (session) => {
     try { await loadExperiences(); } catch (loadError) { showMessage('Saved experience could not load right now.'); }
     return;
   }
+  isAllowedEditor = true;
   accessMessage.hidden = true;
   experienceForm.hidden = false;
   summaryGenerator.hidden = false;
