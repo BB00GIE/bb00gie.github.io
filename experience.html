@@ -28,18 +28,37 @@
       <p id="access-message" class="access-message" hidden></p>
     </section>
     <section id="experience-content" class="experience-content section-wrap">
-      <div class="section-heading"><p class="eyebrow">Career record</p><div class="experience-heading-actions"><p id="experience-count" class="section-note">0 entries</p><a class="button-secondary" href="resume.html" target="_blank" rel="noopener">Show resume <span aria-hidden="true">↗</span></a></div></div>
-      <form id="experience-form" class="experience-form" hidden>
-        <p id="form-heading" class="eyebrow">New role</p>
-        <button id="import-resume" class="button-secondary" type="button">Import resume entries <span aria-hidden="true">↓</span></button>
-        <button id="synthesize-repos" class="button-secondary" type="button">Synthesize GitHub projects <span aria-hidden="true">+</span></button>
+      <div class="section-heading">
+        <p class="eyebrow">Career record</p>
+        <div class="experience-heading-actions">
+          <p id="experience-count" class="section-note">0 entries</p>
+          <button id="open-new-role" class="button-primary" type="button" hidden>+ Add role</button>
+          <button id="toggle-tools" class="button-secondary" type="button" hidden>Bulk tools ▾</button>
+          <a class="button-secondary" href="resume.html" target="_blank" rel="noopener">Show resume <span aria-hidden="true">↗</span></a>
+        </div>
+      </div>
+
+      <div id="experience-tools-bar" class="experience-tools-bar" hidden>
+        <div class="tools-bar-buttons">
+          <button id="import-resume" class="button-secondary" type="button">Import resume entries <span aria-hidden="true">↓</span></button>
+          <button id="synthesize-repos" class="button-secondary" type="button">Synthesize GitHub projects <span aria-hidden="true">+</span></button>
+          <button id="toggle-summary-panel" class="button-secondary" type="button">Resume summary tools <span aria-hidden="true">⚙</span></button>
+        </div>
+
         <section id="summary-generator" class="summary-generator" hidden>
-          <p class="eyebrow">Local AI resume summary</p>
-          <p class="form-hint">All work experience included in the resume is sent to your local Ollama model. Review the draft before saving.</p>
+          <p class="eyebrow">Local AI resume generator & job matcher</p>
+          <p class="form-hint">Generate an ATS-ready resume summary and bullet points from your work experience using your local Ollama model. Paste an optional job description below to tailor the resume directly to target qualifications and keywords.</p>
           <p id="summary-source-count" class="summary-source-count"></p>
+
+          <label class="job-listing-label">
+            Target Job Listing (Optional)
+            <span class="form-hint">Paste requirements, qualifications, or full job posting to tailor your resume summary and bullet points</span>
+            <textarea id="target-job-listing" rows="4" placeholder="Paste job description, required skills, or responsibilities here... (e.g. Senior Frontend Engineer with React, TypeScript, GraphQL)"></textarea>
+          </label>
+
           <div class="update-form-actions">
-            <button id="generate-summary" type="button">Generate summary <span aria-hidden="true">*</span></button>
-            <button id="generate-resume" type="button">Generate resume <span aria-hidden="true">↗</span></button>
+            <button id="generate-resume" type="button">Generate tailored resume <span aria-hidden="true">↗</span></button>
+            <button id="generate-summary" class="button-secondary" type="button">Generate summary only <span aria-hidden="true">*</span></button>
             <button id="save-summary" class="button-secondary" type="button" hidden>Save approved summary <span aria-hidden="true">+</span></button>
             <button id="publish-resume" type="button" hidden>Publish generated resume <span aria-hidden="true">↗</span></button>
           </div>
@@ -50,56 +69,111 @@
           </div>
           <p id="summary-message" class="publish-feedback" role="status" hidden></p>
         </section>
-        <div class="experience-form-grid">
-          <label>Company<input name="company" type="text" maxlength="160" required></label>
-          <label>Role<input name="role" type="text" maxlength="160" required></label>
-          <label>Location<input name="location" type="text" maxlength="160"></label>
-          <label>Start date<input name="start_date" type="month" required></label>
-          <label>End date<input name="end_date" type="month"></label>
+      </div>
+
+      <!-- Slide-over Drawer Backdrop & Panel -->
+      <div id="drawer-backdrop" class="drawer-backdrop" hidden></div>
+      <aside id="experience-drawer" class="experience-drawer" aria-labelledby="form-heading" role="dialog" aria-modal="true" hidden>
+        <div class="drawer-header">
+          <div>
+            <p id="form-heading" class="eyebrow">New role</p>
+            <h2 id="drawer-title" class="drawer-title">Add experience</h2>
+          </div>
+          <button id="drawer-close" class="drawer-close-button" type="button" aria-label="Close drawer">✕</button>
         </div>
-        <label>Description<textarea name="description" rows="4"></textarea></label>
-        <label>Highlights <span class="form-hint">One item per line</span><textarea name="highlights" rows="5"></textarea></label>
-        <section id="experience-generator" class="description-generator" hidden>
-          <div class="bullet-generator-heading">
-            <div>
-              <p class="eyebrow">Resume-ready experience</p>
-              <p class="form-hint">Summarize the highlights into resume bullets and generate a polished description in one pass.</p>
+
+        <form id="experience-form" class="experience-form">
+          <div class="drawer-section">
+            <p class="drawer-section-title">Role & Company</p>
+            <div class="experience-form-grid">
+              <label>Company<input name="company" type="text" maxlength="160" required placeholder="e.g. Google"></label>
+              <label>Role<input name="role" type="text" maxlength="160" required placeholder="e.g. Software Engineer"></label>
+              <label>Location<input name="location" type="text" maxlength="160" placeholder="e.g. Mountain View, CA or Remote"></label>
+              <label>Start date<input name="start_date" type="month" required></label>
+              <label>End date<input name="end_date" type="month"></label>
             </div>
+            <label class="current-role-option">
+              <input id="is-current-role" type="checkbox"> Currently working here
+            </label>
           </div>
-          <div id="experience-review" class="bullet-review" hidden>
-            <article class="bullet-version">
-              <h3>Original</h3>
-              <p id="original-description"></p>
-              <ul id="original-highlights"></ul>
-              <div id="removed-highlights-review" class="removed-highlights-review" hidden>
-                <h4>Removed as duplicate</h4>
-                <ul id="removed-highlights"></ul>
-              </div>
-            </article>
-            <article class="bullet-version bullet-version-generated">
-              <h3>LLM-generated</h3>
-              <p id="generated-description"></p>
-              <ul id="generated-bullets"></ul>
-              <p id="change-reason" class="change-reason"></p>
-              <div class="update-form-actions">
-                <button id="keep-generated-description" type="button">Keep description</button>
-                <button id="keep-generated-bullets" type="button">Keep bullets</button>
-              </div>
-            </article>
+
+          <div class="drawer-section">
+            <p class="drawer-section-title">Overview & Context</p>
+            <label>Short Description
+              <span class="form-hint">Brief summary of the role's mission or scope</span>
+              <textarea name="description" rows="3" placeholder="High-level team overview or focus area..."></textarea>
+            </label>
           </div>
-          <p id="experience-message" class="publish-feedback" role="status" hidden></p>
-        </section>
-        <label class="resume-option"><input name="include_in_resume" type="checkbox" checked> Include in generated resume</label>
-        <label>Things learned <span class="form-hint">One item per line</span><textarea name="lessons_learned" rows="4"></textarea></label>
-        <label>Technologies <span class="form-hint">Comma-separated</span><input name="technologies" type="text"></label>
-        <label>Source repository<input name="source_repo" type="url" placeholder="https://github.com/..."></label>
-        <label>Display order<input name="sort_order" type="number" value="0"></label>
-        <p id="form-message" class="publish-feedback" role="status" hidden></p>
-        <div class="update-form-actions">
-          <button id="save-experience" type="submit">Save role <span aria-hidden="true">+</span></button>
-          <button id="cancel-edit" class="button-secondary" type="button" hidden>Cancel</button>
-        </div>
-      </form>
+
+          <div class="drawer-section">
+            <div class="drawer-section-header">
+              <p class="drawer-section-title">Highlights & Achievements</p>
+              <div class="drawer-ai-buttons">
+                <button id="polish-bullets-ai" class="button-ai-polish" type="button" title="Refine and format highlights into concise resume-ready bullets">✨ AI Polish</button>
+                <button id="reword-experience-ai" class="button-ai-reword" type="button" title="Re-word and polish this role with AI">🔄 Re-word with AI</button>
+              </div>
+            </div>
+            <p class="form-hint">Add individual key accomplishments. Each item will appear as a bullet point on your resume and portfolio.</p>
+
+            <div id="bullets-container" class="bullets-container">
+              <!-- Dynamic bullet repeater items injected here -->
+            </div>
+            <button id="add-bullet-btn" class="button-secondary add-bullet-btn" type="button">+ Add bullet point</button>
+
+            <!-- Hidden textarea to preserve standard form submission / compatibility -->
+            <textarea name="highlights" hidden></textarea>
+
+            <section id="experience-generator" class="description-generator" hidden>
+              <div class="bullet-generator-heading">
+                <div>
+                  <p class="eyebrow">Resume-ready experience</p>
+                  <p class="form-hint">Summarize the highlights into resume bullets and generate a polished description in one pass.</p>
+                </div>
+              </div>
+              <div id="experience-review" class="bullet-review" hidden>
+                <article class="bullet-version">
+                  <h3>Original</h3>
+                  <p id="original-description"></p>
+                  <ul id="original-highlights"></ul>
+                  <div id="removed-highlights-review" class="removed-highlights-review" hidden>
+                    <h4>Removed as duplicate</h4>
+                    <ul id="removed-highlights"></ul>
+                  </div>
+                </article>
+                <article class="bullet-version bullet-version-generated">
+                  <h3>LLM-generated</h3>
+                  <p id="generated-description"></p>
+                  <ul id="generated-bullets"></ul>
+                  <p id="change-reason" class="change-reason"></p>
+                  <div class="update-form-actions">
+                    <button id="keep-generated-description" type="button">Keep description</button>
+                    <button id="keep-generated-bullets" type="button">Keep bullets</button>
+                  </div>
+                </article>
+              </div>
+              <p id="experience-message" class="publish-feedback" role="status" hidden></p>
+            </section>
+          </div>
+
+          <div class="drawer-section">
+            <p class="drawer-section-title">Skills & Details</p>
+            <label class="resume-option"><input name="include_in_resume" type="checkbox" checked> Include in generated resume</label>
+            <label>Technologies <span class="form-hint">Comma-separated</span><input name="technologies" type="text" placeholder="TypeScript, React, Python, AWS"></label>
+            <label>Things learned <span class="form-hint">One item per line</span><textarea name="lessons_learned" rows="3" placeholder="Key technical insights or leadership takeaways..."></textarea></label>
+            <label>Source repository<input name="source_repo" type="url" placeholder="https://github.com/..."></label>
+            <label>Display order<input name="sort_order" type="number" value="0"></label>
+          </div>
+
+          <p id="form-message" class="publish-feedback" role="status" hidden></p>
+          <div class="drawer-footer-actions">
+            <button id="save-experience" type="submit">Save role <span aria-hidden="true">+</span></button>
+            <button id="cancel-edit" class="button-secondary" type="button">Cancel</button>
+          </div>
+        </form>
+      </aside>
+
+      <div id="experience-list" class="experience-list" aria-live="polite"></div>
+    </section>
       <div id="experience-list" class="experience-list" aria-live="polite"></div>
     </section>
   </main>

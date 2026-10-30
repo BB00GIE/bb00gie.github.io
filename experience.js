@@ -11,11 +11,25 @@ const experienceForm = document.querySelector('#experience-form');
 const experienceList = document.querySelector('#experience-list');
 const experienceCount = document.querySelector('#experience-count');
 const formHeading = document.querySelector('#form-heading');
+const drawerTitle = document.querySelector('#drawer-title');
 const formMessage = document.querySelector('#form-message');
 const cancelEdit = document.querySelector('#cancel-edit');
+const openNewRole = document.querySelector('#open-new-role');
+const toggleTools = document.querySelector('#toggle-tools');
+const experienceToolsBar = document.querySelector('#experience-tools-bar');
+const toggleSummaryPanel = document.querySelector('#toggle-summary-panel');
+const drawerBackdrop = document.querySelector('#drawer-backdrop');
+const experienceDrawer = document.querySelector('#experience-drawer');
+const drawerClose = document.querySelector('#drawer-close');
+const bulletsContainer = document.querySelector('#bullets-container');
+const addBulletBtn = document.querySelector('#add-bullet-btn');
+const polishBulletsAi = document.querySelector('#polish-bullets-ai');
+const rewordExperienceAi = document.querySelector('#reword-experience-ai');
+const isCurrentRoleCheckbox = document.querySelector('#is-current-role');
 const importResume = document.querySelector('#import-resume');
 const synthesizeRepos = document.querySelector('#synthesize-repos');
 const generateResume = document.querySelector('#generate-resume');
+const targetJobListing = document.querySelector('#target-job-listing');
 const summaryGenerator = document.querySelector('#summary-generator');
 const generateSummary = document.querySelector('#generate-summary');
 const saveSummary = document.querySelector('#save-summary');
@@ -61,44 +75,54 @@ let generatedExperienceDescription = '';
 const resumeExperiences = [
   {
     company: 'Google',
-    role: 'Full Stack Software Engineer',
+    role: 'Full-Stack Software Engineer',
     location: null,
     start_date: '2022-06-01',
-    end_date: null,
-    description: 'Worked on the Core Shopping team to create a positive shopping experience on Google Search.',
+    end_date: '2026-08-01',
+    description: 'Worked on the Core Shopping team designing and scaling natural language understanding data pipelines, user experience enhancements, and AI recommendations for Google Search.',
     highlights: [
-      'Created end-to-end data pipelines to extend the user experience to other locales.',
-      'Conducted A/B testing and data analysis to determine the impact of new features.',
-      'Leveraged LLMs to create new user experiences on Search.'
+      'Scaled natural language understanding (NLU) pipelines for shopping intents from 5 to 31 international locales, expanding product reach to 10M+ daily active users in close collaboration with product managers and research teams.',
+      'Architected Java backend data pipelines and TypeScript/React UI enhancements for Autobuy product cards in partnership with UX designers, processing 500k+ daily notifications via CI/CD pipelines.',
+      'Spearheaded A/B testing initiatives during cross-functional Agile ceremonies to evaluate new shopping intent selector chips, achieving a 5% increase in Deals journeys.',
+      'Implemented an automated release scheduling system with integrated automated testing frameworks, guaranteeing 100% adherence to EU regulatory standards across all feature launches.',
+      'Partnered with product managers to design AI prompts for AI mode (AIM), enabling intent detection and high-volume lookups to surface complementary product recommendations.'
     ],
     lessons_learned: [],
-    technologies: ['C++', 'Java', 'Python', 'JavaScript', 'SQL', 'Git'],
+    technologies: ['C++', 'Java', 'Python', 'TypeScript', 'React', 'SQL', 'Git'],
     source_repo: null,
     sort_order: 0
   },
   {
-    company: 'Amazon',
-    role: 'Software Engineer Intern (EC2)',
+    company: 'Amazon (EC2)',
+    role: 'Software Engineer Intern',
     location: 'Seattle, WA',
     start_date: '2021-05-01',
     end_date: '2021-08-01',
-    description: 'Worked on a project aimed at improving the autoscaling algorithm and optimizing the existing implementation.',
-    highlights: ['Collaborated with team members to design and implement the new algorithm.'],
+    description: 'Designed and deployed proactive autoscaling solutions on AWS EC2 to optimize provisioning latency and system availability.',
+    highlights: [
+      'Designed and deployed a proactive autoscaling algorithm on AWS EC2, cutting server provisioning latency by 20% during high-volume traffic surges.',
+      'Mitigated high-latency buffer times and sustained 99.99% enterprise system availability for major partners handling over 1M concurrent requests during peak events.',
+      'Conducted in-depth data analysis and facilitated technical code reviews, partnering with cross-functional engineering leads to gain approval for production deployment.'
+    ],
     lessons_learned: [],
-    technologies: ['C++', 'Java', 'Python'],
+    technologies: ['AWS', 'EC2', 'Java', 'Python', 'C++'],
     source_repo: null,
     sort_order: 1
   },
   {
     company: 'Delaware State University',
-    role: 'Computer Science Tutor and Teaching Assistant',
+    role: 'Computer Science Tutor & Teaching Assistant',
     location: null,
     start_date: '2019-01-01',
     end_date: '2022-05-01',
-    description: 'Helped students with Python and Java programming while developing weekly coding challenges.',
-    highlights: [],
+    description: 'Facilitated small-group study sessions and provided one-on-one instruction and peer mentorship in Data Structures and foundational Computer Science concepts.',
+    highlights: [
+      'Facilitated small-group study sessions and provided one-on-one instruction in Data Structures.',
+      'Guided students through foundational Computer Science concepts and provided ongoing peer mentorship.',
+      'Transitioned tutoring operations seamlessly across in-person, remote lockdown, and hybrid environments, leveraging virtual collaboration tools (e.g., Zoom, Discord) to maintain uninterrupted academic support and peer mentorship.'
+    ],
     lessons_learned: [],
-    technologies: ['Python', 'Java'],
+    technologies: ['Python', 'Java', 'Data Structures'],
     source_repo: null,
     sort_order: 2
   }
@@ -307,8 +331,12 @@ const renderResumeDraftRoles = () => {
 const generateFullResumeDraft = async () => {
   const workExperience = resumeDraftExperiences();
   if (!workExperience.length) { showSummaryMessage('Add at least one work experience entry to generate a resume.'); return; }
+  const jobListingText = targetJobListing ? targetJobListing.value.trim() : '';
   const originalButtonText = generateResume.textContent.trim();
-  setButtonBusyState(generateResume, 'Generating...', 'Step 1/3: cleaning your work experience into resume-ready bullets...');
+  const step1Text = jobListingText
+    ? 'Step 1/3: tailoring and cleaning work experience against target job listing...'
+    : 'Step 1/3: cleaning your work experience into resume-ready bullets...';
+  setButtonBusyState(generateResume, 'Generating...', step1Text);
   saveSummary.hidden = true;
   summaryReviewLabel.hidden = true;
   resumeDraftReview.hidden = true;
@@ -326,26 +354,47 @@ const generateFullResumeDraft = async () => {
         start_date: experience.start_date || '',
         end_date: experience.end_date || 'Present',
         description: (experience.description || '').slice(0, 300),
-        highlights: (experience.highlights || []).slice(0, 4).map((highlight) => highlight.slice(0, 180))
-      }))
+        highlights: (experience.highlights || []).slice(0, 5).map((highlight) => highlight.slice(0, 200))
+      })),
+      target_job_listing: jobListingText || null
     };
 
-    showSummaryMessage('Step 1/3: cleaning your work experience into resume-ready bullets...');
+    showSummaryMessage(step1Text);
+    const cleanerSystem = jobListingText
+      ? 'You are Agent 1: a resume cleanup and job-matching specialist. Convert raw work experience entries into polished, ATS-friendly resume content for a software engineer, highlighting keywords, competencies, and achievements matching the supplied target job listing. Never invent unsupplied facts. Preserve each entry id exactly. Output valid JSON only.'
+      : 'You are Agent 1: a resume cleanup specialist. Convert raw work experience entries into polished, ATS-friendly resume content for a software engineer. Preserve each entry id exactly. Output valid JSON only.';
+
+    const cleanerPrompt = jobListingText
+      ? `Normalize this work experience into resume-ready bullet points tailored to the target job listing. Prioritize matching technical skills, impacts, and technologies mentioned in the job description without inventing metrics or claims. Preserve every entry id exactly. Return JSON only in this exact shape: {"experience":[{"id":"entry id","company":"...","title":"...","location":"...","start_date":"...","end_date":"...","bullet_points":["bullet 1"]}]}. Input facts & job listing:\n${JSON.stringify(cleanedPayload)}`
+      : `Normalize this work experience into resume-ready bullet points. Preserve every entry id exactly. Return JSON only in this exact shape: {"experience":[{"id":"entry id","company":"...","title":"...","location":"...","start_date":"...","end_date":"...","bullet_points":["bullet 1"]}]}. Work experience facts:\n${JSON.stringify(cleanedPayload)}`;
+
     const cleanerResult = await runOllamaPrompt({
       model: cleanerModel,
-      system: 'You are Agent 1: a resume cleanup specialist. Convert raw work experience entries into polished, ATS-friendly resume content for a software engineer. Preserve each entry id exactly. Output valid JSON only.',
-      prompt: `Normalize this work experience into resume-ready bullet points. Preserve every entry id exactly. Return JSON only in this exact shape: {"experience":[{"id":"entry id","company":"...","title":"...","location":"...","start_date":"...","end_date":"...","bullet_points":["bullet 1"]}]}. Work experience facts:\n${JSON.stringify(cleanedPayload)}`
+      system: cleanerSystem,
+      prompt: cleanerPrompt
     });
 
     const cleanedExperience = Array.isArray(cleanerResult.experience) ? cleanerResult.experience : [];
     const cleanedById = new Map(cleanedExperience.map((entry) => [String(entry.id), entry]));
 
-    showSummaryMessage('Step 2/3: building the software engineer resume draft...');
+    const step2Text = jobListingText
+      ? 'Step 2/3: crafting a job-targeted resume summary and experience bullets...'
+      : 'Step 2/3: building the software engineer resume draft...';
+    showSummaryMessage(step2Text);
+
+    const builderSystem = jobListingText
+      ? 'You are Agent 2: a senior software engineer resume writer specializing in ATS job alignment. Build a targeted summary and bullet points directly addressing the requirements and responsibilities of the target job listing. Output valid JSON only.'
+      : 'You are Agent 2: a senior software engineer resume writer. Build a polished, ATS-friendly resume from cleaned experience data. Output valid JSON only.';
+
+    const builderPrompt = jobListingText
+      ? `Create a tailored software engineer resume draft matching the job listing below. Write a compelling 2-3 sentence summary specifically positioning the candidate for this target role. Return exactly 3-4 impactful bullets per experience entry that align with the role's priorities. Return JSON only in this exact shape: {"summary":"...","experience":[{"id":"entry id","company":"...","title":"...","location":"...","start_date":"...","end_date":"...","bullet_points":["bullet 1","bullet 2","bullet 3"]}]}. Job listing & entries:\n${JSON.stringify({ target_job_listing: jobListingText.slice(0, 1500), normalized_entries: cleanedExperience })}`
+      : `Create a concise software engineer resume using the normalized entries below. Preserve every entry id exactly. Return exactly 3 bullets per entry. Return JSON only in this exact shape: {"summary":"...","experience":[{"id":"entry id","company":"...","title":"...","location":"...","start_date":"...","end_date":"...","bullet_points":["bullet 1","bullet 2","bullet 3"]}]}. Normalized entries:\n${JSON.stringify(cleanedExperience)}`;
+
     const builderResult = await runOllamaPrompt({
       model: builderModel,
       outputTokens: resumeAiConfig.builderOutputTokens,
-      system: 'You are Agent 2: a senior software engineer resume writer. Build a polished, ATS-friendly resume from cleaned experience data. Output valid JSON only.',
-      prompt: `Create a concise software engineer resume using the normalized entries below. Preserve every entry id exactly. Return exactly 3 bullets per entry. Return JSON only in this exact shape: {"summary":"...","experience":[{"id":"entry id","company":"...","title":"...","location":"...","start_date":"...","end_date":"...","bullet_points":["bullet 1","bullet 2","bullet 3"]}]}. Normalized entries:\n${JSON.stringify(cleanedExperience)}`
+      system: builderSystem,
+      prompt: builderPrompt
     });
 
     const summary = typeof builderResult.summary === 'string' ? builderResult.summary.trim() : '';
@@ -367,10 +416,14 @@ const generateFullResumeDraft = async () => {
     if (!summary || summary.length > 700) throw new Error('The model returned an unusable summary.');
 
     showSummaryMessage('Step 3/3: reviewing the draft like a top-tech recruiter...');
+    const reviewerPrompt = jobListingText
+      ? `Review this tailored resume as a software recruiter evaluating fit for the target job listing. Keep each list to 2 items maximum. Return JSON only in this exact shape: {"overall_score":0,"strengths":["..."],"gaps":["..."],"ats_issues":["..."],"improvement_suggestions":["..."],"likely_screening_outcome":"..."}. Target job:\n${jobListingText.slice(0, 800)}\n\nResume:\n${JSON.stringify({ summary, experience: builderExperience.map((entry) => ({ ...entry, bullet_points: (entry.bullet_points || []).slice(0, 3).map((bullet) => bullet.slice(0, 240)) })) })}`
+      : `Review this resume as a software recruiter. Keep each list to 2 items maximum. Return JSON only in this exact shape: {"overall_score":0,"strengths":["..."],"gaps":["..."],"ats_issues":["..."],"improvement_suggestions":["..."],"likely_screening_outcome":"..."}. Resume:\n${JSON.stringify({ summary, experience: builderExperience.map((entry) => ({ ...entry, bullet_points: (entry.bullet_points || []).slice(0, 3).map((bullet) => bullet.slice(0, 240)) })) })}`;
+
     const reviewResult = await runOllamaPrompt({
       model: reviewerModel,
-      system: 'You are Agent 3: a senior technical recruiter for a top software company. Review the resume for clarity, technical relevance, and hiring signal. Return valid JSON only.',
-      prompt: `Review this resume as a software recruiter. Keep each list to 2 items maximum. Return JSON only in this exact shape: {"overall_score":0,"strengths":["..."],"gaps":["..."],"ats_issues":["..."],"improvement_suggestions":["..."],"likely_screening_outcome":"..."}. Resume:\n${JSON.stringify({ summary, experience: builderExperience.map((entry) => ({ ...entry, bullet_points: (entry.bullet_points || []).slice(0, 3).map((bullet) => bullet.slice(0, 240)) })) })}`
+      system: 'You are Agent 3: a senior technical recruiter for a top software company. Review the resume for clarity, technical relevance, job alignment, and hiring signal. Return valid JSON only.',
+      prompt: reviewerPrompt
     });
 
     console.info('Recruiter review:', reviewResult);
@@ -385,9 +438,10 @@ const generateFullResumeDraft = async () => {
     saveSummary.hidden = false;
     publishResume.hidden = false;
     const reviewSummary = Number.isFinite(Number(reviewResult.overall_score))
-      ? ` Resume score: ${reviewResult.overall_score}/100.`
+      ? ` Resume match score: ${reviewResult.overall_score}/100.`
       : '';
-    showSummaryMessage(`Resume draft generated and reviewed by the recruiter.${reviewSummary} Review the summary and bullets before saving or opening the preview.`);
+    const outcomeText = reviewResult.likely_screening_outcome ? ` (Screening: ${reviewResult.likely_screening_outcome})` : '';
+    showSummaryMessage(`Resume draft generated and reviewed against the job criteria.${reviewSummary}${outcomeText} Review the tailored summary and bullets before saving or publishing.`);
     localStorage.setItem('resumePreview', JSON.stringify({ summary, experiences: generatedExperienceBullets, projects: generatedProjectBullets }));
     window.open(`resume.html?preview=${Date.now()}`, '_blank', 'noopener');
   } catch (error) {
@@ -573,12 +627,96 @@ const validateResumeBullets = (bullets) => {
   return invalidBullet ? 'Each resume bullet must be 1-2 sentences.' : null;
 };
 
+/* Bullet repeater management */
+const syncHighlightsTextarea = () => {
+  if (!bulletsContainer || !experienceForm.elements.highlights) return;
+  const bulletInputs = Array.from(bulletsContainer.querySelectorAll('.bullet-input'));
+  const values = bulletInputs.map((input) => input.value.trim()).filter(Boolean);
+  experienceForm.elements.highlights.value = values.join('\n');
+};
+
+const updateBulletNumbers = () => {
+  if (!bulletsContainer) return;
+  const rows = bulletsContainer.querySelectorAll('.bullet-repeater-row');
+  rows.forEach((row, index) => {
+    const num = row.querySelector('.bullet-number');
+    if (num) num.textContent = `${index + 1}.`;
+  });
+};
+
+const createBulletRow = (value = '') => {
+  const row = document.createElement('div');
+  row.className = 'bullet-repeater-row';
+
+  const num = document.createElement('span');
+  num.className = 'bullet-number';
+
+  const input = document.createElement('textarea');
+  input.className = 'bullet-input';
+  input.rows = 2;
+  input.placeholder = 'e.g. Scaled distributed service to 10M+ daily requests with 99.99% uptime...';
+  input.value = value;
+  input.addEventListener('input', syncHighlightsTextarea);
+
+  const deleteBtn = document.createElement('button');
+  deleteBtn.className = 'bullet-delete-btn';
+  deleteBtn.type = 'button';
+  deleteBtn.setAttribute('aria-label', 'Remove bullet');
+  deleteBtn.innerHTML = '&times;';
+  deleteBtn.addEventListener('click', () => {
+    row.remove();
+    updateBulletNumbers();
+    syncHighlightsTextarea();
+    if (!bulletsContainer.children.length) createBulletRow('');
+  });
+
+  row.append(num, input, deleteBtn);
+  bulletsContainer.append(row);
+  updateBulletNumbers();
+  syncHighlightsTextarea();
+  return row;
+};
+
+const populateBulletsRepeater = (bullets = []) => {
+  if (!bulletsContainer) return;
+  bulletsContainer.replaceChildren();
+  if (bullets.length) {
+    bullets.forEach((bullet) => createBulletRow(bullet));
+  } else {
+    createBulletRow('');
+  }
+};
+
+/* Drawer open / close handlers */
+const openDrawer = (isEditing = false) => {
+  if (!experienceDrawer) return;
+  drawerBackdrop.hidden = false;
+  experienceDrawer.hidden = false;
+  requestAnimationFrame(() => {
+    drawerBackdrop.classList.add('is-open');
+    experienceDrawer.classList.add('is-open');
+  });
+  drawerTitle.textContent = isEditing ? 'Edit experience' : 'Add experience';
+  document.body.style.overflow = 'hidden';
+};
+
+const closeDrawer = () => {
+  if (!experienceDrawer) return;
+  drawerBackdrop.classList.remove('is-open');
+  experienceDrawer.classList.remove('is-open');
+  setTimeout(() => {
+    drawerBackdrop.hidden = true;
+    experienceDrawer.hidden = true;
+    document.body.style.overflow = '';
+  }, 280);
+};
+
 const resetForm = () => {
   editingExperience = null;
   experienceForm.reset();
   experienceForm.elements.sort_order.value = '0';
   formHeading.textContent = 'New role';
-  cancelEdit.hidden = true;
+  if (drawerTitle) drawerTitle.textContent = 'Add experience';
   formMessage.hidden = true;
   experienceGenerator.hidden = true;
   experienceReview.hidden = true;
@@ -587,6 +725,10 @@ const resetForm = () => {
   originalExperienceDescription = '';
   generatedExperienceDescription = '';
   experienceMessage.hidden = true;
+  if (isCurrentRoleCheckbox) isCurrentRoleCheckbox.checked = false;
+  if (experienceForm.elements.end_date) experienceForm.elements.end_date.disabled = false;
+  populateBulletsRepeater([]);
+  closeDrawer();
 };
 
 const formatDate = (value) => {
@@ -679,17 +821,13 @@ const renderExperiences = () => {
     const actions = document.createElement('div');
     actions.className = 'update-actions';
     if (isAllowedEditor) {
-      ['Edit', 'Delete', 'Re-word with AI'].forEach((label) => {
+      ['Edit', 'Delete'].forEach((label) => {
         const button = document.createElement('button');
         button.type = 'button';
         button.textContent = label;
         button.addEventListener('click', () => {
           if (label === 'Edit') beginEdit(experience);
           else if (label === 'Delete') deleteExperience(experience.id);
-          else {
-            beginEdit(experience, true);
-            generateExperienceDraft();
-          }
         });
         actions.append(button);
       });
@@ -721,12 +859,23 @@ const beginEdit = (experience, showAiReview = false) => {
       ? (key === 'highlights' ? value.join('\n') : value.join(', '))
       : (key.endsWith('_date') && value ? value.slice(0, 7) : value || '');
   });
+  const bulletList = Array.isArray(experience.highlights)
+    ? experience.highlights
+    : (typeof experience.highlights === 'string' ? experience.highlights.split('\n').filter(Boolean) : []);
+  populateBulletsRepeater(bulletList);
+  if (isCurrentRoleCheckbox) {
+    const isCurrent = !experience.end_date;
+    isCurrentRoleCheckbox.checked = isCurrent;
+    if (experienceForm.elements.end_date) {
+      experienceForm.elements.end_date.disabled = isCurrent;
+      if (isCurrent) experienceForm.elements.end_date.value = '';
+    }
+  }
   experienceForm.elements.include_in_resume.checked = experience.include_in_resume !== false;
   experienceGenerator.hidden = !showAiReview;
   experienceReview.hidden = true;
   formHeading.textContent = 'Edit role';
-  cancelEdit.hidden = false;
-  experienceForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  openDrawer(true);
 };
 
 const deleteExperience = async (id) => {
@@ -764,9 +913,8 @@ const importResumeEntries = async () => {
   importResume.disabled = true;
   try {
     const result = await syncExperienceEntries(resumeExperiences, (experience, entry) => (
-      experience.company === entry.company
-      && experience.role === entry.role
-      && experience.start_date === entry.start_date
+      experience.company.toLowerCase().includes(entry.company.toLowerCase().split(' ')[0])
+      || entry.company.toLowerCase().includes(experience.company.toLowerCase().split(' ')[0])
     ));
     await loadExperiences();
     showMessage(`Resume synced: ${result.inserted} added, ${result.updated} updated, ${result.removed} duplicate${result.removed === 1 ? '' : 's'} removed.`);
@@ -954,8 +1102,11 @@ const updateAuthUi = async (session) => {
     authStatus.textContent = supabaseClient ? 'Public experience record. Sign in to manage it.' : 'Supabase is not configured yet.';
     signIn.hidden = !supabaseClient;
     signOut.hidden = true;
-    experienceForm.hidden = true;
-    summaryGenerator.hidden = true;
+    if (openNewRole) openNewRole.hidden = true;
+    if (toggleTools) toggleTools.hidden = true;
+    if (experienceToolsBar) experienceToolsBar.hidden = true;
+    if (summaryGenerator) summaryGenerator.hidden = true;
+    closeDrawer();
     if (supabaseClient) {
       try { await loadExperiences(); } catch (loadError) { showMessage('Saved experience could not load right now.'); }
     }
@@ -967,8 +1118,11 @@ const updateAuthUi = async (session) => {
   authStatus.textContent = `Signed in as ${username}.`;
   const { data: allowedAuthor, error } = await supabaseClient.from('allowed_authors').select('user_id').eq('user_id', session.user.id).eq('github_username', 'BB00GIE').maybeSingle();
   if (error || !allowedAuthor) {
-    experienceForm.hidden = true;
-    summaryGenerator.hidden = true;
+    if (openNewRole) openNewRole.hidden = true;
+    if (toggleTools) toggleTools.hidden = true;
+    if (experienceToolsBar) experienceToolsBar.hidden = true;
+    if (summaryGenerator) summaryGenerator.hidden = true;
+    closeDrawer();
     accessMessage.hidden = false;
     accessMessage.textContent = error ? 'Access could not be checked. Run the Supabase schema first.' : 'You can view this record, but only Brandon can update it.';
     try { await loadExperiences(); } catch (loadError) { showMessage('Saved experience could not load right now.'); }
@@ -976,9 +1130,10 @@ const updateAuthUi = async (session) => {
   }
   isAllowedEditor = true;
   accessMessage.hidden = true;
-  experienceForm.hidden = false;
-  summaryGenerator.hidden = false;
-  experienceGenerator.hidden = true;
+  if (openNewRole) openNewRole.hidden = false;
+  if (toggleTools) toggleTools.hidden = false;
+  if (experienceToolsBar) experienceToolsBar.hidden = true; // closed by default to avoid clutter
+  if (summaryGenerator) summaryGenerator.hidden = true;
   try { await loadExperiences(); } catch (loadError) { showMessage('Saved experience could not load right now.'); }
 };
 
@@ -991,6 +1146,54 @@ if (signOut) { signOut.addEventListener('click', async () => {
   updateAuthUi(null);
 }); }
 
+if (openNewRole) { openNewRole.addEventListener('click', () => {
+  resetForm();
+  openDrawer(false);
+}); }
+
+if (drawerClose) { drawerClose.addEventListener('click', closeDrawer); }
+if (drawerBackdrop) { drawerBackdrop.addEventListener('click', closeDrawer); }
+
+if (toggleTools) { toggleTools.addEventListener('click', () => {
+  const isCurrentlyHidden = experienceToolsBar.hidden;
+  experienceToolsBar.hidden = !isCurrentlyHidden;
+  toggleTools.textContent = isCurrentlyHidden ? 'Bulk tools ▴' : 'Bulk tools ▾';
+}); }
+
+if (toggleSummaryPanel) { toggleSummaryPanel.addEventListener('click', () => {
+  summaryGenerator.hidden = !summaryGenerator.hidden;
+  if (!summaryGenerator.hidden) {
+    summaryGenerator.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+}); }
+
+if (addBulletBtn) { addBulletBtn.addEventListener('click', () => {
+  const row = createBulletRow('');
+  const input = row.querySelector('.bullet-input');
+  if (input) input.focus();
+}); }
+
+if (isCurrentRoleCheckbox) { isCurrentRoleCheckbox.addEventListener('change', (event) => {
+  const isCurrent = event.target.checked;
+  if (experienceForm.elements.end_date) {
+    experienceForm.elements.end_date.disabled = isCurrent;
+    if (isCurrent) experienceForm.elements.end_date.value = '';
+  }
+}); }
+
+if (polishBulletsAi) { polishBulletsAi.addEventListener('click', () => {
+  syncHighlightsTextarea();
+  experienceGenerator.hidden = false;
+  generateExperienceDraft();
+}); }
+
+if (rewordExperienceAi) { rewordExperienceAi.addEventListener('click', () => {
+  syncHighlightsTextarea();
+  experienceGenerator.hidden = false;
+  experienceGenerator.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  generateExperienceDraft();
+}); }
+
 if (cancelEdit) { cancelEdit.addEventListener('click', resetForm); }
 if (importResume) { importResume.addEventListener('click', importResumeEntries); }
 if (synthesizeRepos) { synthesizeRepos.addEventListener('click', synthesizeRepositoryEntries); }
@@ -999,7 +1202,12 @@ if (keepGeneratedDescription) { keepGeneratedDescription.addEventListener('click
   showExperienceMessage('LLM-generated description selected. Save the role to keep it.');
 }); }
 if (keepGeneratedBullets) { keepGeneratedBullets.addEventListener('click', () => {
-  showExperienceMessage('LLM-generated bullets selected. Save the role to keep them.');
+  if (generatedResumeBullets && generatedResumeBullets.length) {
+    populateBulletsRepeater(generatedResumeBullets);
+    showExperienceMessage('LLM-generated bullets applied to form fields! Save the role to commit them.');
+  } else {
+    showExperienceMessage('LLM-generated bullets selected. Save the role to keep them.');
+  }
 }); }
 if (generateResume) { generateResume.addEventListener('click', () => {
   if (experienceForm.hidden) { window.open('resume.html', '_blank', 'noopener'); return; }

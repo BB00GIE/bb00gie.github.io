@@ -16,10 +16,10 @@ const currentResume = {
       end_date: '2026-08-01',
       highlights: [
         'Scaled natural language understanding (NLU) pipelines for shopping intents from 5 to 31 international locales, expanding product reach to 10M+ daily active users in close collaboration with product managers and research teams.',
-        'Architected Java backend data pipelines and TypeScript/React UI enhancements for Autobuy product cards, processing 500k+ daily notifications via CI/CD pipelines.',
-        'Spearheaded A/B testing initiatives to evaluate new shopping intent selector chips, achieving a 5% increase in Deals journeys.',
-        'Implemented an automated release scheduling system with integrated testing frameworks, guaranteeing 100% adherence to EU regulatory standards across feature launches.',
-        'Partnered with product managers to design AI prompts for AI mode (AIM), enabling intent detection and high-volume lookups for complementary product recommendations.'
+        'Architected Java backend data pipelines and TypeScript/React UI enhancements for Autobuy product cards in partnership with UX designers, processing 500k+ daily notifications via CI/CD pipelines.',
+        'Spearheaded A/B testing initiatives during cross-functional Agile ceremonies to evaluate new shopping intent selector chips, achieving a 5% increase in Deals journeys.',
+        'Implemented an automated release scheduling system with integrated automated testing frameworks, guaranteeing 100% adherence to EU regulatory standards across all feature launches.',
+        'Partnered with product managers to design AI prompts for AI mode (AIM), enabling intent detection and high-volume lookups to surface complementary product recommendations.'
       ]
     },
     {
@@ -44,7 +44,7 @@ const currentResume = {
       highlights: [
         'Facilitated small-group study sessions and provided one-on-one instruction in Data Structures.',
         'Guided students through foundational Computer Science concepts and provided ongoing peer mentorship.',
-        'Transitioned tutoring operations across in-person, remote lockdown, and hybrid environments using virtual collaboration tools to maintain uninterrupted academic support.'
+        'Transitioned tutoring operations seamlessly across in-person, remote lockdown, and hybrid environments, leveraging virtual collaboration tools (e.g., Zoom, Discord) to maintain uninterrupted academic support and peer mentorship.'
       ]
     }
   ],
@@ -58,7 +58,8 @@ const currentResume = {
     resume_bullets: [
       'Streamlined automated document generation pipelines using JavaScript and local LLM APIs, reducing generation latency by 40% for dynamic portfolio updates.',
       'Built full-stack post-management features with React and PostgreSQL, integrating GitHub Actions CI/CD workflows and automated testing frameworks.',
-      'Engineered a responsive static site architecture with custom CSS3 flexbox and grid components for seamless cross-device compatibility and low page load times.'
+      'Engineered a responsive modern personal portfolio hosted on GitHub Pages using HTML5, CSS3, and JavaScript to showcase software projects and technical writing.',
+      'Optimized UI layout and styles with custom CSS3 flexbox and grid components, ensuring seamless cross-device compatibility and low page load times.'
     ]
   }]
 };
