@@ -726,9 +726,15 @@ const populateBulletsRepeater = (bullets = []) => {
   }
 };
 
+let drawerCloseTimeout = null;
+
 /* Drawer open / close handlers */
 const openDrawer = (isEditing = false) => {
   if (!experienceDrawer) return;
+  if (drawerCloseTimeout) {
+    clearTimeout(drawerCloseTimeout);
+    drawerCloseTimeout = null;
+  }
   drawerBackdrop.hidden = false;
   experienceDrawer.hidden = false;
   requestAnimationFrame(() => {
@@ -741,16 +747,21 @@ const openDrawer = (isEditing = false) => {
 
 const closeDrawer = () => {
   if (!experienceDrawer) return;
+  if (drawerCloseTimeout) {
+    clearTimeout(drawerCloseTimeout);
+    drawerCloseTimeout = null;
+  }
   drawerBackdrop.classList.remove('is-open');
   experienceDrawer.classList.remove('is-open');
-  setTimeout(() => {
+  drawerCloseTimeout = setTimeout(() => {
     drawerBackdrop.hidden = true;
     experienceDrawer.hidden = true;
     document.body.style.overflow = '';
+    drawerCloseTimeout = null;
   }, 280);
 };
 
-const resetForm = () => {
+const resetForm = (shouldCloseDrawer = true) => {
   editingExperience = null;
   experienceForm.reset();
   experienceForm.elements.sort_order.value = '0';
@@ -767,7 +778,9 @@ const resetForm = () => {
   if (isCurrentRoleCheckbox) isCurrentRoleCheckbox.checked = false;
   if (experienceForm.elements.end_date) experienceForm.elements.end_date.disabled = false;
   populateBulletsRepeater([]);
-  closeDrawer();
+  if (shouldCloseDrawer) {
+    closeDrawer();
+  }
 };
 
 const formatDate = (value) => {
@@ -917,8 +930,15 @@ const beginEdit = (experience, showAiReview = false) => {
   openDrawer(true);
 };
 
+const isDemoMode = new URLSearchParams(window.location.search).has('demo');
+
 const deleteExperience = async (id) => {
   if (!window.confirm('Delete this role?')) return;
+  if (isDemoMode && (!supabaseClient || !currentSession)) {
+    experiences = experiences.filter((experience) => experience.id !== id);
+    renderExperiences();
+    return;
+  }
   const { error } = await supabaseClient.from('work_experience').delete().eq('id', id);
   if (error) { showMessage('This role could not be deleted.'); return; }
   await loadExperiences();
@@ -1137,6 +1157,18 @@ const synthesizeRepositoryEntries = async () => {
 const updateAuthUi = async (session) => {
   currentSession = session;
   isAllowedEditor = false;
+  if (isDemoMode) {
+    isAllowedEditor = true;
+    accessMessage.hidden = true;
+    if (openNewRole) openNewRole.hidden = false;
+    if (toggleTools) toggleTools.hidden = false;
+    authStatus.textContent = 'Demo mode active (local preview).';
+    if (!experiences.length) {
+      experiences = [...resumeExperiences];
+      renderExperiences();
+    }
+    return;
+  }
   if (!session) {
     authStatus.textContent = supabaseClient ? 'Public experience record. Sign in to manage it.' : 'Supabase is not configured yet.';
     signIn.hidden = !supabaseClient;
@@ -1186,12 +1218,18 @@ if (signOut) { signOut.addEventListener('click', async () => {
 }); }
 
 if (openNewRole) { openNewRole.addEventListener('click', () => {
-  resetForm();
+  resetForm(false);
   openDrawer(false);
 }); }
 
 if (drawerClose) { drawerClose.addEventListener('click', closeDrawer); }
 if (drawerBackdrop) { drawerBackdrop.addEventListener('click', closeDrawer); }
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && experienceDrawer && !experienceDrawer.hidden) {
+    closeDrawer();
+  }
+});
 
 if (toggleTools) { toggleTools.addEventListener('click', () => {
   const isCurrentlyHidden = experienceToolsBar.hidden;
@@ -1282,6 +1320,18 @@ if (experienceForm) { experienceForm.addEventListener('submit', async (event) =>
   if (payload.source_repo) {
     const bulletError = validateResumeBullets(payload.resume_bullets);
     if (bulletError) { showMessage(bulletError); return; }
+  }
+  if (isDemoMode && (!supabaseClient || !currentSession)) {
+    if (editingExperience) {
+      const idx = experiences.findIndex((e) => e.id === editingExperience.id || e === editingExperience);
+      if (idx >= 0) experiences[idx] = { ...editingExperience, ...payload };
+    } else {
+      experiences.unshift({ id: `demo-${Date.now()}`, ...payload });
+    }
+    resetForm(true);
+    renderExperiences();
+    showMessage('Role saved locally in demo mode.');
+    return;
   }
   const query = editingExperience
     ? supabaseClient.from('work_experience').update(payload).eq('id', editingExperience.id)
