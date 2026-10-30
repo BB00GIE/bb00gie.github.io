@@ -340,11 +340,19 @@ const clearButtonBusyState = (button) => {
   }
 };
 
-const showSummaryMessage = (message) => {
+const showSummaryMessage = (message, state = 'info') => {
   summaryMessage.hidden = false;
-  summaryMessage.classList.remove('is-idle');
-  summaryMessage.classList.add('is-busy');
-  summaryMessage.innerHTML = '<span class="ai-status-spinner" aria-hidden="true"></span><span>' + message + '</span>';
+  summaryMessage.classList.remove('is-idle', 'is-busy', 'is-error');
+  if (state === 'busy') {
+    summaryMessage.classList.add('is-busy');
+    summaryMessage.innerHTML = '<span class="ai-status-spinner" aria-hidden="true"></span><span>' + message + '</span>';
+  } else if (state === 'error') {
+    summaryMessage.classList.add('is-error');
+    summaryMessage.textContent = message;
+  } else {
+    summaryMessage.classList.add('is-idle');
+    summaryMessage.textContent = message;
+  }
 };
 
 const selectedProjects = () => experiences
@@ -598,14 +606,23 @@ const renderBulletList = (target, bullets) => {
   });
 };
 
-const showExperienceMessage = (message) => {
+const showExperienceMessage = (message, state = 'info') => {
   experienceMessage.hidden = false;
-  experienceMessage.classList.remove('is-idle');
-  experienceMessage.classList.add('is-busy');
-  experienceMessage.innerHTML = '<span class="ai-status-spinner" aria-hidden="true"></span><span>' + message + '</span>';
+  experienceMessage.classList.remove('is-idle', 'is-busy', 'is-error');
+  if (state === 'busy') {
+    experienceMessage.classList.add('is-busy');
+    experienceMessage.innerHTML = '<span class="ai-status-spinner" aria-hidden="true"></span><span>' + message + '</span>';
+  } else if (state === 'error') {
+    experienceMessage.classList.add('is-error');
+    experienceMessage.textContent = message;
+  } else {
+    experienceMessage.classList.add('is-idle');
+    experienceMessage.textContent = message;
+  }
 };
 
 const getDescriptionFactsFromForm = () => {
+  syncHighlightsTextarea();
   const formData = new FormData(experienceForm);
   return {
     company: formData.get('company').trim(),
@@ -623,13 +640,13 @@ const getDescriptionFactsFromForm = () => {
 const generateExperienceDraft = async () => {
   const facts = getDescriptionFactsFromForm();
   if (!facts.company || !facts.role || !facts.highlights.length) {
-    showExperienceMessage('Add a company, role, and at least one highlight first.');
+    showExperienceMessage('Add a company, role, and at least one highlight first.', 'error');
     return;
   }
   experienceReview.hidden = true;
   originalExperienceDescription = facts.description;
   originalResumeBullets = facts.highlights;
-  showExperienceMessage('Synthesizing experience into resume-ready format with Gemini...');
+  showExperienceMessage('Synthesizing experience into resume-ready format with Gemini...', 'busy');
   try {
     const cleanerModel = resumeAiConfig.cleanerModel || resumeAiConfig.model;
     const cleanerResult = await runGeminiPrompt({
@@ -677,10 +694,10 @@ ${JSON.stringify(facts)}`
     const reason = 'Synthesized experience into high-impact, ATS-optimized resume bullets following Google XYZ impact formatting.';
     changeReason.textContent = `Why these changes: ${reason}`;
     experienceReview.hidden = false;
-    showExperienceMessage('Draft generated. Approve the generated description or bullets, then save the role.');
+    showExperienceMessage('Draft generated. Approve the generated description or bullets, then save the role.', 'info');
   } catch (error) {
     console.error('Gemini experience draft generation failed:', error);
-    showExperienceMessage(`Gemini could not generate a resume draft. ${error.message}`);
+    showExperienceMessage(`Gemini could not generate a resume draft. ${error.message}`, 'error');
   } finally {
   }
 };

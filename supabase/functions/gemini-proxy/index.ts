@@ -20,6 +20,8 @@ serve(async (req) => {
       });
     }
 
+    const token = authHeader.replace(/^Bearer\s+/i, "");
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -29,10 +31,10 @@ serve(async (req) => {
     const {
       data: { user },
       error: userError,
-    } = await supabase.auth.getUser();
+    } = await supabase.auth.getUser(token);
 
     if (userError || !user) {
-      return new Response(JSON.stringify({ error: "Unauthorized user" }), {
+      return new Response(JSON.stringify({ error: `Unauthorized user: ${userError?.message || "Invalid or expired token"}` }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -47,7 +49,7 @@ serve(async (req) => {
       .maybeSingle();
 
     if (authorError || !author) {
-      return new Response(JSON.stringify({ error: "Forbidden: Not an authorized author" }), {
+      return new Response(JSON.stringify({ error: `Forbidden: Not an authorized author (${authorError?.message || user.id})` }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -85,8 +87,18 @@ serve(async (req) => {
     });
 
     const geminiData = await geminiRes.json();
+
+    if (!geminiRes.ok) {
+      console.error("Gemini API error:", geminiRes.status, geminiData);
+      const geminiErrMsg = (geminiData && geminiData.error && geminiData.error.message) || JSON.stringify(geminiData);
+      return new Response(JSON.stringify({ error: `Gemini API error (${geminiRes.status}): ${geminiErrMsg}` }), {
+        status: geminiRes.status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     return new Response(JSON.stringify(geminiData), {
-      status: geminiRes.status,
+      status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err: any) {
