@@ -128,16 +128,16 @@ def load_raw_experience(path: str) -> List[Dict[str, Any]]:
 
 def agent_1_clean_experience(raw_entries: List[Dict[str, Any]], api_key: str, model: str) -> Dict[str, Any]:
     system_prompt = """
-You are a resume cleanup specialist. Convert raw work experience entries into polished, ATS-friendly resume content for a software engineer. Remove fluff, correct formatting issues, standardize dates, and rewrite bullets in strong action-oriented language.
+You are an expert technical resume writer and career strategist specializing in software engineering. Convert raw work experience entries, highlights, and notes into polished, ATS-optimized, high-impact resume content.
 
-Rules:
-- Keep only relevant work experience.
-- Rewrite every supplied highlight into exactly one concise, measurable bullet point.
-- Never delete, merge, or invent highlights; the output bullet count must equal the input highlight count.
-- Keep each bullet to one sentence and no more than 20 words.
-- Preserve the original meaning and chronology.
-- Remove vague language like "worked on," "helped with," or "responsible for" without describing outcomes.
-- Prefer strong verbs and measurable impact.
+Guidelines:
+- Synthesize raw notes, highlights, and lessons into 3-5 punchy, high-impact resume bullets per role.
+- Follow the XYZ impact formula: Accomplished [X], as measured by [Y], by doing [Z].
+- Lead each bullet with a strong action verb (e.g. Engineered, Architected, Scaled, Spearheaded, Automated).
+- Naturally integrate technologies, frameworks, and methodologies into the achievements.
+- Keep bullets substantive and concise (1-2 sentences each).
+- Remove vague filler like "worked on" or "helped with" and highlight concrete engineering impact.
+- Preserve factual accuracy without inventing ungrounded claims or dates.
 - Output valid JSON only.
 
 Required JSON schema:
@@ -155,7 +155,7 @@ Required JSON schema:
 }
 """.strip()
 
-    user_prompt = "Clean and normalize the following raw work experience entries into resume-ready content for a software engineer.\n\n" + json.dumps(raw_entries, indent=2)
+    user_prompt = "Synthesize and normalize the following raw work experience entries into resume-ready content for a software engineer.\n\n" + json.dumps(raw_entries, indent=2)
     response = gemini_generate(api_key, model, user_prompt, system=system_prompt)
     return parse_json_response(response)
 

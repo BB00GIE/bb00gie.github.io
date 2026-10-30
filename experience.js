@@ -290,7 +290,20 @@ const runGeminiPrompt = async ({ model, system, prompt, outputTokens = 2048 }) =
     });
 
     if (error) {
-      throw new Error(`Edge Function error: ${error.message || error}`);
+      let detail = '';
+      if (error.context) {
+        try {
+          if (typeof error.context.json === 'function') {
+            const errBody = await error.context.json();
+            detail = errBody && errBody.error
+              ? (typeof errBody.error === 'string' ? errBody.error : (errBody.error.message || JSON.stringify(errBody.error)))
+              : JSON.stringify(errBody);
+          } else if (typeof error.context.text === 'function') {
+            detail = await error.context.text();
+          }
+        } catch (_) {}
+      }
+      throw new Error(`Edge Function error: ${detail || error.message || error}`);
     }
     if (data && data.error) {
       const msg = typeof data.error === 'string' ? data.error : (data.error.message || JSON.stringify(data.error));
@@ -457,12 +470,12 @@ const generateFullResumeDraft = async () => {
       const draft = builderExperience.find((item) => String(item.id || '') === String(experience.id)) || builderExperience.find((item) => item.company === experience.company && item.title === experience.role);
       const draftBullets = Array.isArray(draft && draft.bullet_points) ? draft.bullet_points : [];
       const bullets = draftBullets.filter((bullet) => typeof bullet === 'string' && bullet.trim()).map((bullet) => bullet.trim()).slice(0, 5);
-      if (bullets.length < 3) {
+      if (!bullets.length) {
         const cleanedEntry = cleanedById.get(String(experience.id)) || cleanedExperience.find((item) => item.company === experience.company && item.title === experience.role);
         const cleanedBulletsArray = Array.isArray(cleanedEntry && cleanedEntry.bullet_points) ? cleanedEntry.bullet_points : [];
         const cleanedBullets = cleanedBulletsArray.filter((bullet) => typeof bullet === 'string' && bullet.trim()).map((bullet) => bullet.trim()).slice(0, 5);
-        if (cleanedBullets.length >= 3) return { id: experience.id, company: experience.company, role: experience.role, bullets: cleanedBullets };
-        throw new Error(`The model returned fewer than 3 bullets for ${experience.role}. Add more highlights and try again.`);
+        if (cleanedBullets.length) return { id: experience.id, company: experience.company, role: experience.role, bullets: cleanedBullets };
+        throw new Error(`The model returned no bullets for ${experience.role}. Add more highlights and try again.`);
       }
       return { id: experience.id, company: experience.company, role: experience.role, bullets };
     });
@@ -527,8 +540,8 @@ const generateSummaryDraft = async (openPreview = false) => {
     const draft = generated.summary ? generated.summary.trim() : '';
     generatedProjectBullets = projects.map((project) => {
       const generatedProject = generated.projects && generated.projects.find((item) => item.id === project.id);
-      const bullets = ((generatedProject && generatedProject.bullets) || []).filter((bullet) => typeof bullet === 'string' && bullet.trim()).slice(0, 3);
-      if (bullets.length < 3) throw new Error(`The model returned fewer than 3 bullets for ${project.name}.`);
+      const bullets = ((generatedProject && generatedProject.bullets) || []).filter((bullet) => typeof bullet === 'string' && bullet.trim()).slice(0, 5);
+      if (!bullets.length) throw new Error(`The model returned no bullets for ${project.name}.`);
       return { id: project.id, bullets };
     });
     if (!draft || draft.length > 700) throw new Error('The model returned an unusable summary.');
@@ -616,24 +629,36 @@ const generateExperienceDraft = async () => {
   experienceReview.hidden = true;
   originalExperienceDescription = facts.description;
   originalResumeBullets = facts.highlights;
-  showExperienceMessage('Running Agent 1 to format this experience into resume-ready content...');
+  showExperienceMessage('Synthesizing experience into resume-ready format with Gemini...');
   try {
     const cleanerModel = resumeAiConfig.cleanerModel || resumeAiConfig.model;
     const cleanerResult = await runGeminiPrompt({
       model: cleanerModel,
-      system: 'You are Agent 1: a resume cleanup specialist. Rewrite every supplied highlight into one concise, resume-ready bullet. Never delete, merge, or invent highlights. Keep each bullet to one sentence and no more than twenty words. Preserve the original meaning and output valid JSON only.',
-      prompt: `Rewrite this work experience into a polished description and concise resume bullets. Return exactly one bullet for every input highlight, in the same order. The output bullet count must equal the input highlight count. Do not omit or combine any highlights. Keep each bullet to one sentence and no more than 20 words. Return JSON only in this exact shape: {"description":"...","bullet_points":["rewritten bullet 1"]}. Work experience facts:\n${JSON.stringify(facts)}`
+      system: 'You are an expert technical resume writer and career strategist specializing in software engineering. Your objective is to synthesize raw work experiences, highlights, notes, and technologies into high-impact, ATS-optimized resume content. Elevate bullets using strong action verbs, technical scope, and measurable outcomes (following the Google XYZ formula: accomplished [X], as measured by [Y], by doing [Z]). Synthesize or group related points into 3-5 punchy, substantive bullets (1-2 sentences each). Avoid generic filler, and output valid JSON only.',
+      prompt: `Synthesize this software engineering experience into a polished 1-2 sentence role overview description and 3-5 high-impact, ATS-friendly resume bullets.
+
+Guidelines:
+- Lead each bullet with a powerful action verb (e.g. Architected, Engineered, Scaled, Streamlined, Spearheaded, Implemented).
+- Frame achievements with clear context: what was built, what technologies/methodologies were used, and the engineering impact, scale, or outcome.
+- Synthesize, elevate, or consolidate raw highlights and notes into the strongest 3 to 5 cohesive bullets (do not feel forced to preserve a 1:1 mapping of messy notes).
+- Naturally integrate relevant technologies from the provided tech stack into the bullets.
+- Keep each bullet punchy, impactful, and professional (1-2 sentences).
+- Do not invent fictitious companies, employment dates, or ungrounded statistics.
+
+Return JSON only in this exact schema:
+{"description":"concise 1-2 sentence overview of the role and scope","bullet_points":["impact bullet 1","impact bullet 2"]}
+
+Work experience facts:
+${JSON.stringify(facts)}`
     });
 
     const cleanedDescription = typeof cleanerResult.description === 'string' ? cleanerResult.description.trim() : facts.description;
     const cleanedBullets = Array.isArray(cleanerResult.bullet_points)
-      ? cleanerResult.bullet_points.filter((bullet) => typeof bullet === 'string' && bullet.trim()).map((bullet) => bullet.trim())
+      ? cleanerResult.bullet_points.filter((bullet) => typeof bullet === 'string' && bullet.trim()).map((bullet) => bullet.trim()).slice(0, 5)
       : [];
-    if (cleanedBullets.length !== facts.highlights.length) {
-      throw new Error(`Agent 1 returned ${cleanedBullets.length} bullets for ${facts.highlights.length} highlights. No highlights were removed; try again.`);
+    if (!cleanedBullets.length) {
+      throw new Error('The model returned no usable resume bullets. Add more details and try again.');
     }
-    const longBullet = cleanedBullets.find((bullet) => bullet.split(/\s+/).filter(Boolean).length > 20);
-    if (longBullet) throw new Error('Agent 1 returned a bullet longer than 20 words. Try again.');
     generatedExperienceDescription = cleanedDescription;
     generatedResumeBullets = cleanedBullets;
     const removedIndexes = [];
@@ -649,7 +674,7 @@ const generateExperienceDraft = async () => {
     removedHighlightsReview.hidden = !removedIndexes.length;
     generatedDescription.textContent = generatedExperienceDescription;
     renderBulletList(generatedBullets, generatedResumeBullets);
-    const reason = 'Agent 1 cleaned and formatted the supplied experience into resume-ready content.';
+    const reason = 'Synthesized experience into high-impact, ATS-optimized resume bullets following Google XYZ impact formatting.';
     changeReason.textContent = `Why these changes: ${reason}`;
     experienceReview.hidden = false;
     showExperienceMessage('Draft generated. Approve the generated description or bullets, then save the role.');
@@ -1066,8 +1091,8 @@ const formatProjectWithAgent = async (project) => {
     const formatterRequest = runGeminiPrompt({
       model: resumeAiConfig.cleanerModel || resumeAiConfig.model,
       outputTokens: 2048,
-      system: 'You are Agent 1: a resume project formatter. Turn verified software project facts into a concise, ATS-friendly Selected Project entry. You may merge duplicate or overlapping facts, but never invent employers, users, metrics, technologies, outcomes, or dates. Keep the entry clearly project-based, not employment. Output valid JSON only.',
-      prompt: `Format this software project for a resume. Preserve project_id and the repository name exactly. Return JSON only in this exact shape: {"project_id":"...","project_name":"repository name","role":"...","company":"Independent project","location":"...","start_date":"YYYY-MM-DD","end_date":"YYYY-MM-DD or null","description":"one or two concise sentences","bullet_points":["concise bullet"]}. Use only the supplied facts. Merge duplicates when useful. Return 2-5 concise bullets, each one sentence and no more than 20 words. Keep supported repository dates; use null only for an unknown end date. Project facts:\n${JSON.stringify(projectFacts)}`
+      system: 'You are an expert technical resume writer. Turn verified software project facts, commits, and PR activity into a concise, ATS-friendly Selected Project entry. Highlight architectural decisions, tech stack, and practical implementation. Keep the entry clearly project-focused. Output valid JSON only.',
+      prompt: `Synthesize this software project for a resume. Preserve project_id and repository name exactly. Return 2-4 impactful resume bullets (1-2 sentences each) highlighting system architecture, technologies used, and key features built. Do not invent fictitious employers or metrics. Return JSON only in this exact shape: {"project_id":"...","project_name":"repository name","role":"...","company":"Independent project","location":"...","start_date":"YYYY-MM-DD","end_date":"YYYY-MM-DD or null","description":"one or two concise sentences","bullet_points":["impact bullet"]}. Project facts:\n${JSON.stringify(projectFacts)}`
     });
     const result = await Promise.race([
       formatterRequest,
