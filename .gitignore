@@ -1,0 +1,5 @@
+# Gemini configuration with API keys
+gemini-config.js
+.env
+*.env
+__pycache__/

@@ -41,14 +41,12 @@ const summaryMessage = document.querySelector('#summary-message');
 const resumeDraftReview = document.querySelector('#resume-draft-review');
 const resumeDraftRoles = document.querySelector('#resume-draft-roles');
 const resumeAiConfig = {
-  endpoint: 'http://127.0.0.1:11434/api/generate',
-  model: 'qwen2.5:7b-instruct',
-  cleanerModel: 'qwen2.5vl:3b',
-  builderModel: 'qwen2.5:7b-instruct',
-  reviewerModel: 'qwen2.5:7b-instruct',
-  contextLength: 8192,
+  model: 'gemini-3.8-flash',
+  cleanerModel: 'gemini-3.8-flash',
+  builderModel: 'gemini-3.8-flash',
+  reviewerModel: 'gemini-3.8-flash',
   builderOutputTokens: 4096,
-  ...window.RESUME_AI_CONFIG
+  ...(window.GEMINI_CONFIG || window.RESUME_AI_CONFIG)
 };
 const experienceGenerator = document.querySelector('#experience-generator');
 const experienceReview = document.querySelector('#experience-review');
@@ -133,7 +131,7 @@ const showMessage = (message) => {
   formMessage.textContent = message;
 };
 
-const parseOllamaJson = (text) => {
+const parseAiJson = (text) => {
   if (!text || !text.trim()) throw new Error('The model returned an empty response.');
 
   const stripCodeFence = (value) => value
@@ -232,24 +230,80 @@ const parseOllamaJson = (text) => {
   throw new Error(`The model returned invalid JSON: ${trimmed.slice(0, 200)}`);
 };
 
-const runOllamaPrompt = async ({ model, system, prompt, outputTokens = 2048 }) => {
-  const response = await fetch(resumeAiConfig.endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model,
-      stream: false,
-      format: 'json',
-      think: false,
-      options: { temperature: 0.2, num_ctx: resumeAiConfig.contextLength, num_predict: outputTokens },
-      system,
-      prompt
-    })
-  });
-  if (!response.ok) throw new Error(`Ollama returned ${response.status}`);
-  const result = await response.json();
-  const rawText = result.response || result.message?.content || result.thinking || '';
-  return parseOllamaJson(rawText);
+const getGeminiApiKey = () => {
+  const key = (resumeAiConfig.apiKey || (window.GEMINI_CONFIG && window.GEMINI_CONFIG.apiKey) || '').trim();
+  if (!key || key.includes('YOUR_GEMINI_API_KEY')) {
+    return '';
+  }
+  return key;
+};
+
+const runGeminiPrompt = async ({ model, system, prompt, outputTokens = 2048 }) => {
+  const targetModel = model || resumeAiConfig.model || 'gemini-3.8-flash';
+  const localApiKey = getGeminiApiKey();
+
+  // If local API key is provided (e.g. from gemini-config.js in local development), call Gemini directly
+  if (localApiKey) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(targetModel)}:generateContent?key=${encodeURIComponent(localApiKey)}`;
+    const contents = [{ role: 'user', parts: [{ text: prompt }] }];
+    const payload = {
+      contents,
+      generationConfig: {
+        temperature: 0.2,
+        maxOutputTokens: outputTokens,
+        responseMimeType: 'application/json'
+      }
+    };
+    if (system) {
+      payload.systemInstruction = { parts: [{ text: system }] };
+    }
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      let message = `Gemini API returned ${response.status}`;
+      try {
+        const parsedError = JSON.parse(errorBody);
+        if (parsedError.error && parsedError.error.message) {
+          message = `Gemini error (${response.status}): ${parsedError.error.message}`;
+        }
+      } catch (_) {}
+      throw new Error(message);
+    }
+
+    const result = await response.json();
+    const candidate = result.candidates && result.candidates[0];
+    const part = candidate && candidate.content && candidate.content.parts && candidate.content.parts[0];
+    const rawText = (part && part.text) || '';
+    return parseAiJson(rawText);
+  }
+
+  // Otherwise, use the secure Supabase Edge Function (works on live GitHub Pages without exposing keys)
+  if (supabaseClient && currentSession) {
+    const { data, error } = await supabaseClient.functions.invoke('gemini-proxy', {
+      body: { model: targetModel, system, prompt, outputTokens }
+    });
+
+    if (error) {
+      throw new Error(`Edge Function error: ${error.message || error}`);
+    }
+    if (data && data.error) {
+      const msg = typeof data.error === 'string' ? data.error : (data.error.message || JSON.stringify(data.error));
+      throw new Error(`Gemini proxy error: ${msg}`);
+    }
+
+    const candidate = data && data.candidates && data.candidates[0];
+    const part = candidate && candidate.content && candidate.content.parts && candidate.content.parts[0];
+    const rawText = (part && part.text) || '';
+    return parseAiJson(rawText);
+  }
+
+  throw new Error('Gemini is not configured. Either supply an API key in gemini-config.js or sign in with your authorized GitHub account to use the secure Edge Function.');
 };
 
 const setButtonBusyState = (button, label, message) => {
@@ -368,7 +422,7 @@ const generateFullResumeDraft = async () => {
       ? `Normalize this work experience into resume-ready bullet points tailored to the target job listing. Prioritize matching technical skills, impacts, and technologies mentioned in the job description without inventing metrics or claims. Preserve every entry id exactly. Return JSON only in this exact shape: {"experience":[{"id":"entry id","company":"...","title":"...","location":"...","start_date":"...","end_date":"...","bullet_points":["bullet 1"]}]}. Input facts & job listing:\n${JSON.stringify(cleanedPayload)}`
       : `Normalize this work experience into resume-ready bullet points. Preserve every entry id exactly. Return JSON only in this exact shape: {"experience":[{"id":"entry id","company":"...","title":"...","location":"...","start_date":"...","end_date":"...","bullet_points":["bullet 1"]}]}. Work experience facts:\n${JSON.stringify(cleanedPayload)}`;
 
-    const cleanerResult = await runOllamaPrompt({
+    const cleanerResult = await runGeminiPrompt({
       model: cleanerModel,
       system: cleanerSystem,
       prompt: cleanerPrompt
@@ -390,7 +444,7 @@ const generateFullResumeDraft = async () => {
       ? `Create a tailored software engineer resume draft matching the job listing below. Write a compelling 2-3 sentence summary specifically positioning the candidate for this target role. Return exactly 3-4 impactful bullets per experience entry that align with the role's priorities. Return JSON only in this exact shape: {"summary":"...","experience":[{"id":"entry id","company":"...","title":"...","location":"...","start_date":"...","end_date":"...","bullet_points":["bullet 1","bullet 2","bullet 3"]}]}. Job listing & entries:\n${JSON.stringify({ target_job_listing: jobListingText.slice(0, 1500), normalized_entries: cleanedExperience })}`
       : `Create a concise software engineer resume using the normalized entries below. Preserve every entry id exactly. Return exactly 3 bullets per entry. Return JSON only in this exact shape: {"summary":"...","experience":[{"id":"entry id","company":"...","title":"...","location":"...","start_date":"...","end_date":"...","bullet_points":["bullet 1","bullet 2","bullet 3"]}]}. Normalized entries:\n${JSON.stringify(cleanedExperience)}`;
 
-    const builderResult = await runOllamaPrompt({
+    const builderResult = await runGeminiPrompt({
       model: builderModel,
       outputTokens: resumeAiConfig.builderOutputTokens,
       system: builderSystem,
@@ -420,7 +474,7 @@ const generateFullResumeDraft = async () => {
       ? `Review this tailored resume as a software recruiter evaluating fit for the target job listing. Keep each list to 2 items maximum. Return JSON only in this exact shape: {"overall_score":0,"strengths":["..."],"gaps":["..."],"ats_issues":["..."],"improvement_suggestions":["..."],"likely_screening_outcome":"..."}. Target job:\n${jobListingText.slice(0, 800)}\n\nResume:\n${JSON.stringify({ summary, experience: builderExperience.map((entry) => ({ ...entry, bullet_points: (entry.bullet_points || []).slice(0, 3).map((bullet) => bullet.slice(0, 240)) })) })}`
       : `Review this resume as a software recruiter. Keep each list to 2 items maximum. Return JSON only in this exact shape: {"overall_score":0,"strengths":["..."],"gaps":["..."],"ats_issues":["..."],"improvement_suggestions":["..."],"likely_screening_outcome":"..."}. Resume:\n${JSON.stringify({ summary, experience: builderExperience.map((entry) => ({ ...entry, bullet_points: (entry.bullet_points || []).slice(0, 3).map((bullet) => bullet.slice(0, 240)) })) })}`;
 
-    const reviewResult = await runOllamaPrompt({
+    const reviewResult = await runGeminiPrompt({
       model: reviewerModel,
       system: 'You are Agent 3: a senior technical recruiter for a top software company. Review the resume for clarity, technical relevance, job alignment, and hiring signal. Return valid JSON only.',
       prompt: reviewerPrompt
@@ -445,8 +499,8 @@ const generateFullResumeDraft = async () => {
     localStorage.setItem('resumePreview', JSON.stringify({ summary, experiences: generatedExperienceBullets, projects: generatedProjectBullets }));
     window.open(`resume.html?preview=${Date.now()}`, '_blank', 'noopener');
   } catch (error) {
-    console.error('Ollama full resume generation failed:', error);
-    showSummaryMessage(`Ollama could not generate the resume. ${error instanceof TypeError ? 'Check that ollama serve is running and allows this site origin.' : error.message}`);
+    console.error('Gemini full resume generation failed:', error);
+    showSummaryMessage(`Gemini could not generate the resume. ${error.message}`);
   } finally {
     clearButtonBusyState(generateResume);
     if (generateResume.dataset.originalText) {
@@ -463,22 +517,13 @@ const generateSummaryDraft = async (openPreview = false) => {
   generateSummary.disabled = true;
   saveSummary.hidden = true;
   summaryReviewLabel.hidden = true;
-  showSummaryMessage('Connecting to your local Ollama model...');
+  showSummaryMessage('Connecting to Gemini model...');
   try {
-    const response = await fetch(resumeAiConfig.endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: resumeAiConfig.model,
-        stream: false,
-        format: 'json',
-        think: false,
-        prompt: `Create a resume draft using only the supplied project facts. Write a concise professional profile summary in 2-3 sentences. For every project, rewrite its supplied bullets into 3-5 distinct concise resume bullets, with each bullet focusing on a different supplied fact. Do not invent metrics, employers, job titles, dates, technologies, users, or outcomes. Return JSON only in this exact shape: {"summary":"...","projects":[{"id":"project id","bullets":["bullet 1"]}]}. Include every project exactly once, preserve each project id, and return between 3 and 5 bullets per project. Project facts:\n${JSON.stringify(projects)}`
-      })
+    const generated = await runGeminiPrompt({
+      model: resumeAiConfig.model,
+      system: 'You are an expert resume writer. Create concise, professional profile summaries and resume bullets. Return valid JSON only.',
+      prompt: `Create a resume draft using only the supplied project facts. Write a concise professional profile summary in 2-3 sentences. For every project, rewrite its supplied bullets into 3-5 distinct concise resume bullets, with each bullet focusing on a different supplied fact. Do not invent metrics, employers, job titles, dates, technologies, users, or outcomes. Return JSON only in this exact shape: {"summary":"...","projects":[{"id":"project id","bullets":["bullet 1"]}]}. Include every project exactly once, preserve each project id, and return between 3 and 5 bullets per project. Project facts:\n${JSON.stringify(projects)}`
     });
-    if (!response.ok) throw new Error(`Ollama returned ${response.status}`);
-    const result = await response.json();
-    const generated = parseOllamaJson(result.response || result.message?.content || result.thinking || '{}');
     const draft = generated.summary ? generated.summary.trim() : '';
     generatedProjectBullets = projects.map((project) => {
       const generatedProject = generated.projects && generated.projects.find((item) => item.id === project.id);
@@ -498,11 +543,8 @@ const generateSummaryDraft = async (openPreview = false) => {
       window.open(previewUrl, '_blank', 'noopener');
     }
   } catch (error) {
-    console.error('Ollama summary generation failed:', error);
-    const detail = error instanceof TypeError
-      ? 'The browser could not reach Ollama. Check that ollama serve is running and allows this site origin.'
-      : error.message;
-    showSummaryMessage(`Ollama could not generate a draft. ${detail}`);
+    console.error('Gemini summary generation failed:', error);
+    showSummaryMessage(`Gemini could not generate a draft. ${error.message}`);
   } finally {
     generateSummary.disabled = false;
   }
@@ -577,9 +619,9 @@ const generateExperienceDraft = async () => {
   showExperienceMessage('Running Agent 1 to format this experience into resume-ready content...');
   try {
     const cleanerModel = resumeAiConfig.cleanerModel || resumeAiConfig.model;
-    const cleanerResult = await runOllamaPrompt({
+    const cleanerResult = await runGeminiPrompt({
       model: cleanerModel,
-      system: 'You are Agent 1: a resume cleanup specialist. Rewrite every supplied highlight into one concise, resume-ready bullet. Never delete, merge, or invent highlights. Keep each bullet to one sentence and no more than  twenty words. Preserve the original meaning and output valid JSON only.',
+      system: 'You are Agent 1: a resume cleanup specialist. Rewrite every supplied highlight into one concise, resume-ready bullet. Never delete, merge, or invent highlights. Keep each bullet to one sentence and no more than twenty words. Preserve the original meaning and output valid JSON only.',
       prompt: `Rewrite this work experience into a polished description and concise resume bullets. Return exactly one bullet for every input highlight, in the same order. The output bullet count must equal the input highlight count. Do not omit or combine any highlights. Keep each bullet to one sentence and no more than 20 words. Return JSON only in this exact shape: {"description":"...","bullet_points":["rewritten bullet 1"]}. Work experience facts:\n${JSON.stringify(facts)}`
     });
 
@@ -612,11 +654,8 @@ const generateExperienceDraft = async () => {
     experienceReview.hidden = false;
     showExperienceMessage('Draft generated. Approve the generated description or bullets, then save the role.');
   } catch (error) {
-    console.error('Ollama experience draft generation failed:', error);
-    const detail = error instanceof TypeError
-      ? 'The browser could not reach Ollama. Check that ollama serve is running and allows this site origin.'
-      : error.message;
-    showExperienceMessage(`Ollama could not generate a resume draft. ${detail}`);
+    console.error('Gemini experience draft generation failed:', error);
+    showExperienceMessage(`Gemini could not generate a resume draft. ${error.message}`);
   } finally {
   }
 };
@@ -1004,7 +1043,7 @@ const formatProjectWithAgent = async (project) => {
     end_date: project.end_date
   };
   try {
-    const formatterRequest = runOllamaPrompt({
+    const formatterRequest = runGeminiPrompt({
       model: resumeAiConfig.cleanerModel || resumeAiConfig.model,
       outputTokens: 2048,
       system: 'You are Agent 1: a resume project formatter. Turn verified software project facts into a concise, ATS-friendly Selected Project entry. You may merge duplicate or overlapping facts, but never invent employers, users, metrics, technologies, outcomes, or dates. Keep the entry clearly project-based, not employment. Output valid JSON only.',
